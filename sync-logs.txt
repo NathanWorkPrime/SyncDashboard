@@ -1,0 +1,204 @@
+[TAILING] Tailing last 200 lines for [sql-bubble-sync] process (change the value with --lines option)
+C:\Users\Administrator\.pm2\logs\sql-bubble-sync-error.log last 200 lines:
+C:\Users\Administrator\.pm2\logs\sql-bubble-sync-out.log last 200 lines:
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82851 / firmno 58924 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82851 / firmno 58924 (trn_dte: Thu Jun 04 2026 10:12:25 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82851 / firmno 58924 (1 client(s))
+0|sql-bubb |   💾 Checkpoint saved: memno 82851/firmno 58924 processed → global watermark: 2026-05-01T20:06:36.297Z
+0|sql-bubb | 
+0|sql-bubb | ────────────────────────────────────────────────────────────
+0|sql-bubb | 📊 Progress: 1782/5316 employment records (34%)
+0|sql-bubb | 🔍 [SQL] Fetching rows for memno 82851 / firmno 60750...
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: Processing memno 82851 / firmno 60750... (1 client(s))
+0|sql-bubb |   ✅ [SQL] Got 1 row(s)
+0|sql-bubb |   ✅ Synced employment memno 82851 / firmno 60750 (trn_dte: Thu Jun 04 2026 10:13:05 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82851 / firmno 60750 (1 client(s))
+0|sql-bubb |   💾 Checkpoint saved: memno 82851/firmno 60750 processed → global watermark: 2026-05-01T20:06:36.297Z
+0|sql-bubb | 
+0|sql-bubb | ────────────────────────────────────────────────────────────
+0|sql-bubb | 📊 Progress: 1783/5316 employment records (34%)
+0|sql-bubb | 🔍 [SQL] Fetching rows for memno 82881 / firmno 1...
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: Processing memno 82881 / firmno 1... (1 client(s))
+0|sql-bubb |   ✅ [SQL] Got 11 row(s)
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 1 (trn_dte: Thu Jun 04 2026 09:57:34 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 1 (trn_dte: Thu Jun 04 2026 09:58:30 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 1 (trn_dte: Thu Jun 04 2026 09:58:30 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 1 (trn_dte: Thu Jun 04 2026 09:59:29 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 1 (trn_dte: Thu Jun 04 2026 10:01:34 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 1 (trn_dte: Thu Jun 04 2026 10:01:34 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 1 (trn_dte: Thu Jun 04 2026 10:01:46 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 1 (trn_dte: Thu Jun 04 2026 10:08:08 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 1 (trn_dte: Thu Jun 04 2026 10:08:09 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 1 (trn_dte: Thu Jun 04 2026 10:08:17 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 1 (trn_dte: Thu Jun 04 2026 10:08:20 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 1 (1 client(s))
+0|sql-bubb |   💾 Checkpoint saved: memno 82881/firmno 1 processed → global watermark: 2026-05-01T20:06:36.297Z
+0|sql-bubb | 
+0|sql-bubb | ────────────────────────────────────────────────────────────
+0|sql-bubb | 📊 Progress: 1784/5316 employment records (34%)
+0|sql-bubb | 🔍 [SQL] Fetching rows for memno 82881 / firmno 57193...
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: Processing memno 82881 / firmno 57193... (1 client(s))
+0|sql-bubb |   ✅ [SQL] Got 6 row(s)
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 57193 (trn_dte: Thu Jun 04 2026 09:44:48 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 57193 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 57193 (trn_dte: Thu Jun 04 2026 09:57:34 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 57193 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 57193 (trn_dte: Thu Jun 04 2026 09:58:30 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 57193 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 57193 (trn_dte: Thu Jun 04 2026 09:59:29 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 57193 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 57193 (trn_dte: Thu Jun 04 2026 10:01:34 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 57193 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 57193 (trn_dte: Thu Jun 04 2026 10:01:45 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 57193 (1 client(s))
+0|sql-bubb |   💾 Checkpoint saved: memno 82881/firmno 57193 processed → global watermark: 2026-05-01T20:06:36.297Z
+0|sql-bubb | 
+0|sql-bubb | ────────────────────────────────────────────────────────────
+0|sql-bubb | 📊 Progress: 1785/5316 employment records (34%)
+0|sql-bubb | 🔍 [SQL] Fetching rows for memno 82881 / firmno 61278...
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: Processing memno 82881 / firmno 61278... (1 client(s))
+0|sql-bubb |   ✅ [SQL] Got 1 row(s)
+0|sql-bubb |   ✅ Synced employment memno 82881 / firmno 61278 (trn_dte: Thu Jun 04 2026 10:08:09 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82881 / firmno 61278 (1 client(s))
+0|sql-bubb |   💾 Checkpoint saved: memno 82881/firmno 61278 processed → global watermark: 2026-05-01T20:06:36.297Z
+0|sql-bubb | 
+0|sql-bubb | ────────────────────────────────────────────────────────────
+0|sql-bubb | 📊 Progress: 1786/5316 employment records (34%)
+0|sql-bubb | 🔍 [SQL] Fetching rows for memno 82882 / firmno 1...
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: Processing memno 82882 / firmno 1... (1 client(s))
+0|sql-bubb |   ✅ [SQL] Got 13 row(s)
+0|sql-bubb |   ✅ Synced employment memno 82882 / firmno 1 (trn_dte: Thu Sep 26 2019 15:33:16 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82882 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82882 / firmno 1 (trn_dte: Thu Sep 26 2019 15:33:16 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82882 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82882 / firmno 1 (trn_dte: Fri May 29 2026 18:55:26 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82882 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82882 / firmno 1 (trn_dte: Fri May 29 2026 18:55:26 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82882 / firmno 1 (1 client(s))
+0|sql-bubb | 🔍 [get-watermarks] Bubble Base: https://fidfunddev.site/api/1.1/
+0|sql-bubb | 🔍 [get-watermarks] Version: LIVE (main)
+0|sql-bubb | 🔍 [get-watermarks] Using Config IDs: LIVE
+0|sql-bubb | 🔍 [get-watermarks] IDs: {
+0|sql-bubb |   "firms": "1778651429513x106836507335746900",
+0|sql-bubb |   "banks": "1778747218142x780024036299171500",
+0|sql-bubb |   "practitioners": "1778756787140x340802730669506050",
+0|sql-bubb |   "practitionersadm": "1778763877520x680883048056017900",
+0|sql-bubb |   "employmentHistory": "1779089119064x383538508200077060",
+0|sql-bubb |   "audits": "1779173702392x524303161016420350"
+0|sql-bubb | }
+0|sql-bubb |   → Fetching firms: https://fidfunddev.site/api/1.1/obj/syncconfig/1778651429513x106836507335746900
+0|sql-bubb |   ✅ Synced employment memno 82882 / firmno 1 (trn_dte: Fri May 29 2026 20:28:28 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82882 / firmno 1 (1 client(s))
+0|sql-bubb |   ← firms: HTTP 200
+0|sql-bubb |   ✓ firms data: {
+0|sql-bubb |   "response": {
+0|sql-bubb |     "Created Date": "2026-05-13T05:50:29.513Z",
+0|sql-bubb |     "DB": "Firms",
+0|sql-bubb |     "Created By": "admin_user_fidfundffc_test",
+0|sql-bubb |     "Modified Date": "2026-06-11T05:52:35.559Z",
+0|sql-bubb |     "LastSyncTime": "2026-05-01T12:04:00.000Z",
+0|sql-bubb |     "_id": "1778651429513x106836507335746900"
+0|sql-bubb |   }
+0|sql-bubb | }
+0|sql-bubb |   → Fetching banks: https://fidfunddev.site/api/1.1/obj/syncconfig/1778747218142x780024036299171500
+0|sql-bubb |   ← banks: HTTP 200
+0|sql-bubb |   ✓ banks data: {
+0|sql-bubb |   "response": {
+0|sql-bubb |     "Created Date": "2026-05-14T08:26:58.142Z",
+0|sql-bubb |     "DB": "Banks",
+0|sql-bubb |     "Created By": "admin_user_fidfundffc_test",
+0|sql-bubb |     "Modified Date": "2026-06-09T14:05:37.505Z",
+0|sql-bubb |     "LastSyncTime": "2026-06-03T12:50:07.440Z",
+0|sql-bubb |     "_id": "1778747218142x780024036299171500"
+0|sql-bubb |   }
+0|sql-bubb | }
+0|sql-bubb |   → Fetching practitioners: https://fidfunddev.site/api/1.1/obj/syncconfig/1778756787140x340802730669506050
+0|sql-bubb |   ✅ Synced employment memno 82882 / firmno 1 (trn_dte: Fri May 29 2026 20:30:06 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82882 / firmno 1 (1 client(s))
+0|sql-bubb |   ← practitioners: HTTP 200
+0|sql-bubb |   ✓ practitioners data: {
+0|sql-bubb |   "response": {
+0|sql-bubb |     "Created Date": "2026-05-14T11:06:27.140Z",
+0|sql-bubb |     "DB": "Practitioners",
+0|sql-bubb |     "Created By": "admin_user_fidfundffc_test",
+0|sql-bubb |     "Modified Date": "2026-06-11T08:05:35.822Z",
+0|sql-bubb |     "LastSyncTime": "2026-05-22T08:00:01.007Z",
+0|sql-bubb |     "_id": "1778756787140x340802730669506050"
+0|sql-bubb |   }
+0|sql-bubb | }
+0|sql-bubb |   → Fetching practitionersadm: https://fidfunddev.site/api/1.1/obj/syncconfig/1778763877520x680883048056017900
+0|sql-bubb |   ← practitionersadm: HTTP 200
+0|sql-bubb |   ✓ practitionersadm data: {
+0|sql-bubb |   "response": {
+0|sql-bubb |     "Created Date": "2026-05-14T13:04:37.520Z",
+0|sql-bubb |     "DB": "practitionersadm",
+0|sql-bubb |     "Created By": "admin_user_fidfundffc_test",
+0|sql-bubb |     "Modified Date": "2026-06-11T09:22:58.639Z",
+0|sql-bubb |     "LastSyncTime": "2026-05-14T13:46:00.430Z",
+0|sql-bubb |     "_id": "1778763877520x680883048056017900"
+0|sql-bubb |   }
+0|sql-bubb | }
+0|sql-bubb |   → Fetching employmentHistory: https://fidfunddev.site/api/1.1/obj/syncconfig/1779089119064x383538508200077060
+0|sql-bubb |   ← employmentHistory: HTTP 200
+0|sql-bubb |   ✓ employmentHistory data: {
+0|sql-bubb |   "response": {
+0|sql-bubb |     "Created Date": "2026-05-18T07:25:19.064Z",
+0|sql-bubb |     "DB": "Employment History",
+0|sql-bubb |     "Created By": "admin_user_fidfundffc_test",
+0|sql-bubb |     "Modified Date": "2026-06-11T10:13:59.218Z",
+0|sql-bubb |     "LastSyncTime": "2026-05-01T20:06:36.297Z",
+0|sql-bubb |     "_id": "1779089119064x383538508200077060"
+0|sql-bubb |   }
+0|sql-bubb | }
+0|sql-bubb |   → Fetching audits: https://fidfunddev.site/api/1.1/obj/syncconfig/1779173702392x524303161016420350
+0|sql-bubb |   ← audits: HTTP 200
+0|sql-bubb |   ✓ audits data: {
+0|sql-bubb |   "response": {
+0|sql-bubb |     "Created Date": "2026-05-19T06:55:02.392Z",
+0|sql-bubb |     "DB": "Audits",
+0|sql-bubb |     "Created By": "admin_user_fidfundffc_test",
+0|sql-bubb |     "Modified Date": "2026-06-09T12:45:12.422Z",
+0|sql-bubb |     "LastSyncTime": "2026-05-05T14:50:17.133Z",
+0|sql-bubb |     "_id": "1779173702392x524303161016420350"
+0|sql-bubb |   }
+0|sql-bubb | }
+0|sql-bubb | ✅ [get-watermarks] Final watermarks: {
+0|sql-bubb |   "firms": "2026-05-01T12:04:00.000Z",
+0|sql-bubb |   "banks": "2026-06-03T12:50:07.440Z",
+0|sql-bubb |   "practitioners": "2026-05-22T08:00:01.007Z",
+0|sql-bubb |   "practitionersadm": "2026-05-14T13:46:00.430Z",
+0|sql-bubb |   "employmentHistory": "2026-05-01T20:06:36.297Z",
+0|sql-bubb |   "audits": "2026-05-05T14:50:17.133Z"
+0|sql-bubb | }
+0|sql-bubb |   ✅ Synced employment memno 82882 / firmno 1 (trn_dte: Fri May 29 2026 20:30:06 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82882 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82882 / firmno 1 (trn_dte: Fri May 29 2026 21:54:41 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82882 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82882 / firmno 1 (trn_dte: Fri May 29 2026 21:56:03 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82882 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82882 / firmno 1 (trn_dte: Fri May 29 2026 21:56:04 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82882 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82882 / firmno 1 (trn_dte: Fri May 29 2026 21:56:21 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82882 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82882 / firmno 1 (trn_dte: Fri May 29 2026 21:56:50 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82882 / firmno 1 (1 client(s))
+0|sql-bubb |   ✅ Synced employment memno 82882 / firmno 1 (trn_dte: Fri May 29 2026 21:58:07 GMT+0200 (South Africa Standard Time))
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: ✓ Synced memno 82882 / firmno 1 (1 client(s))
+0|sql-bubb |   💾 Checkpoint saved: memno 82882/firmno 1 processed → global watermark: 2026-05-01T20:06:36.297Z
+0|sql-bubb | 
+0|sql-bubb | ────────────────────────────────────────────────────────────
+0|sql-bubb | 📊 Progress: 1787/5316 employment records (34%)
+0|sql-bubb | 🔍 [SQL] Fetching rows for memno 82882 / firmno 40530...
+0|sql-bubb | [SSE] ✓ Sent to employmenthistory: Processing memno 82882 / firmno 40530... (1 client(s))
+0|sql-bubb | [SSE] Client disconnected from employmenthistory (0 remaining)
+
