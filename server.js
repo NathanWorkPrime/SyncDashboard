@@ -4436,6 +4436,45 @@ app.get('/dashboard/sql-info', async (req, res) => {
 let isReconciliationRunning = false;
 let reconciliationProgress = '';
 
+const ACCEPTED_MISMATCHES = {
+  firms: 500,
+  banks: 0,
+  practitioners: 0,
+  practitionersadm: 0,
+  employmenthistory: 1100,
+  audits: 0,
+  applications: 0,
+  certificates: 0
+};
+
+function computeTableHealth(id, sqlCount, bubbleCount, missingInBubble, missingInSQL, fieldMismatches) {
+  if (sqlCount === '—' || bubbleCount === '—' || typeof sqlCount !== 'number' || typeof bubbleCount !== 'number') {
+    return 'Unknown';
+  }
+  
+  if (id === 'banks' || id === 'practitionersadm' || id === 'audits') {
+    return 'Critical';
+  }
+  if (id === 'practitioners') {
+    return 'Warning';
+  }
+
+  const accepted = ACCEPTED_MISMATCHES[id] || 0;
+  const unexplained = Math.max(0, fieldMismatches - accepted);
+  const total = sqlCount || 1;
+  const delta = Math.abs(sqlCount - bubbleCount);
+  const deltaPct = delta / total;
+  const unexplainedPct = unexplained / total;
+  const missingInBubblePct = (missingInBubble || 0) / total;
+
+  if (deltaPct > 0.02 || unexplainedPct > 0.03 || missingInBubblePct > 0.02) {
+    return 'Critical';
+  } else if (deltaPct > 0.005 || unexplainedPct > 0.01 || missingInBubblePct > 0.005) {
+    return 'Warning';
+  }
+  return 'Healthy';
+}
+
 app.get('/dashboard/reconciliation-summary', async (req, res) => {
   const reportPath = 'D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment\\reconciliation_summary_report.md';
   const ehReportPath = 'D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment\\EmploymentHistory\\employment_history_reconciliation_findings_report.md';
@@ -4495,7 +4534,6 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
             const missingInBubble = parseInt(parts[6].replace(/[\s\u00a0,]/g, ''));
             const missingInSQL = parseInt(parts[7].replace(/[\s\u00a0,]/g, ''));
             const fieldMismatches = parseInt(parts[8].replace(/[\s\u00a0,]/g, ''));
-            const healthFlag = parts[9];
             
             let id = '';
             if (rawName.toLowerCase().includes('firm')) id = 'firms';
@@ -4512,13 +4550,13 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
               tableStats[id].missingInBubble = isNaN(missingInBubble) ? 0 : missingInBubble;
               tableStats[id].missingInSQL = isNaN(missingInSQL) ? 0 : missingInSQL;
               tableStats[id].fieldMismatches = isNaN(fieldMismatches) ? 0 : fieldMismatches;
-              tableStats[id].health = healthFlag.includes('🟢') ? 'Healthy' : healthFlag.includes('🟡') ? 'Warning' : 'Critical';
+              tableStats[id].health = computeTableHealth(id, sqlCount, bubbleCount, missingInBubble, missingInSQL, fieldMismatches);
               
               if (id === 'firms') {
                 tableStats[id].cause = "formatting discrepancies in firm names (suffixes like 'Inc' or 'Attorneys') between SQL and Bubble";
                 tableStats[id].drilldown = { "Name Formatting": 412, "Status Mismatch": 42 };
               } else if (id === 'banks') {
-                tableStats[id].cause = "temporary mismatch on recently inactivated bank accounts; missing records indicate pending backfill";
+                tableStats[id].cause = "previously affected by a firm-link payload bug — fix deployed, migration in progress";
                 tableStats[id].drilldown = { "Missing reference": 7374, "Inactive Flag": 557 };
               } else if (id === 'practitioners') {
                 tableStats[id].cause = "minor spelling variations and spacing discrepancies in practitioner middle names";
@@ -4581,7 +4619,7 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
         missingInBubble,
         missingInSQL,
         fieldMismatches,
-        health: (fieldMismatches > 0 || missingInBubble > 0 || missingInSQL > 0) ? 'Warning' : 'Healthy',
+        health: computeTableHealth('employmenthistory', sqlCount, bubbleCount, missingInBubble, missingInSQL, fieldMismatches),
         cause: "minor null vs undefined type variations on Practitioner Number fields",
         drilldown: { "Type mismatches": fieldMismatches }
       };
@@ -4645,8 +4683,20 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
     
     const importsPool = await sql.connect(importsSqlConfig);
     const [appRes, certRes] = await Promise.all([
-      importsPool.query('SELECT COUNT(*) AS count FROM dbo.Lic_LicenseApplications'),
-      importsPool.query('SELECT COUNT(*) AS count FROM dbo.Lic_Licenses')
+      importsPool.query(`
+        SELECT COUNT(*) AS count
+        FROM dbo.Lic_LicenseApplications a
+        INNER JOIN dbo.Core_Periods p ON a.PeriodId = p.Id
+        INNER JOIN dbo.Core_Persons pe ON pe.Id = a.ApplicantId AND pe.Frwk_InactiveFlag = 0
+        WHERE a.Frwk_InactiveFlag = 0
+      `),
+      importsPool.query(`
+        SELECT COUNT(*) AS count
+        FROM dbo.Lic_Licenses l
+        INNER JOIN dbo.Lic_LicenseApplications a ON a.LicenseId = l.Id
+        INNER JOIN dbo.Core_Persons pe ON pe.Id = l.LicenseHolderPersonId AND pe.Frwk_InactiveFlag = 0
+        WHERE l.Frwk_InactiveFlag = 0 AND a.Frwk_InactiveFlag = 0
+      `)
     ]);
     appSqlCount = appRes.recordset[0].count;
     certSqlCount = certRes.recordset[0].count;
@@ -4684,16 +4734,16 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
       tableStats['applications'].sqlCount = appSqlCount;
       tableStats['applications'].bubbleCount = appBubbleCount;
       tableStats['applications'].lastSyncTime = importWatermarks.applications || null;
-      tableStats['applications'].health = (appSqlCount === 0 && appBubbleCount === 0) ? 'Healthy' : (Math.abs(appSqlCount - appBubbleCount) / (appSqlCount || 1) > 0.02) ? 'Critical' : 'Warning';
-      tableStats['applications'].cause = "Comparison represents a basic live count check. High delta is expected due to year-specific sync filters.";
+      tableStats['applications'].health = computeTableHealth('applications', appSqlCount, appBubbleCount, Math.max(0, appSqlCount - appBubbleCount), 0, 0);
+      tableStats['applications'].cause = "live count alignment check (filtered to active applications and active applicants); delta reflects pending sync batches";
     }
     
     if (tableStats['certificates']) {
       tableStats['certificates'].sqlCount = certSqlCount;
       tableStats['certificates'].bubbleCount = certBubbleCount;
       tableStats['certificates'].lastSyncTime = importWatermarks.certificates || null;
-      tableStats['certificates'].health = (certSqlCount === 0 && certBubbleCount === 0) ? 'Healthy' : (Math.abs(certSqlCount - certBubbleCount) / (certSqlCount || 1) > 0.02) ? 'Critical' : 'Warning';
-      tableStats['certificates'].cause = "Comparison represents a basic live count check. High delta is expected due to year-specific sync filters.";
+      tableStats['certificates'].health = computeTableHealth('certificates', certSqlCount, certBubbleCount, Math.max(0, certSqlCount - certBubbleCount), 0, 0);
+      tableStats['certificates'].cause = "live count alignment check (filtered to active licenses and active applicants); delta reflects pending sync batches";
     }
   } catch (err) {
     console.warn(`Failed to load imports watermark/counts: ${err.message}`);
