@@ -496,6 +496,7 @@
 
 <div class="flat-nav">
     <button class="flat-nav-item active" data-page="overview"  onclick="showPage('overview')"><span class="nav-label">Overview</span></button>
+    <button class="flat-nav-item"        data-page="live-dashboard" onclick="showPage('live-dashboard')"><span class="nav-label">Live Dashboard</span></button>
     <button class="flat-nav-item"        data-page="processes" onclick="showPage('processes')"><span class="nav-label">Processes</span></button>
     <button class="flat-nav-item"        data-page="history"   onclick="showPage('history')"><span class="nav-label">Sync History</span></button>
     <button class="flat-nav-item"        data-page="imports"   onclick="showPage('imports')"><span class="nav-label">Imports</span></button>
@@ -504,6 +505,7 @@
     <button class="flat-nav-item"        data-page="delete"    onclick="showPage('delete')"><span class="nav-label">Bulk Delete</span></button>
     <button class="flat-nav-item"        data-page="manual-push" onclick="showPage('manual-push')"><span class="nav-label">Manual Push</span></button>
     <button class="flat-nav-item"        data-page="errors"    onclick="showPage('errors')"><span class="nav-label">Errors</span><span class="nav-badge" id="nav-error-badge" style="display:none;">0</span></button>
+    <button class="flat-nav-item"        data-page="versions"  onclick="showPage('versions')"><span class="nav-label">Version History</span></button>
     <div class="flat-nav-divider"></div>
     <button class="flat-nav-item"        data-page="settings"  onclick="showPage('settings')"><span class="nav-label">Settings</span></button>
   </div>
@@ -640,7 +642,10 @@
           </div>
           <div class="health-row">
             <div style="display:flex;align-items:center;gap:8px;"><span class="dot dot-grey" id="health-dot-bubble"></span><div><div style="font-size:13px;font-weight:600;">Bubble API</div><div style="font-size:11px;color:var(--text-muted);">Sync target</div></div></div>
-            <span class="badge badge-grey" id="health-badge-bubble">—</span>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <span class="badge badge-grey" id="health-badge-bubble-env">—</span>
+              <span class="badge badge-grey" id="health-badge-bubble">—</span>
+            </div>
           </div>
           <div class="health-row">
             <div style="display:flex;align-items:center;gap:8px;"><span class="dot dot-grey" id="health-dot-scheduler"></span><div><div style="font-size:13px;font-weight:600;">Sync Engine</div><div style="font-size:11px;color:var(--text-muted);" id="health-sub-scheduler">No active schedulers</div></div></div>
@@ -648,7 +653,10 @@
           </div>
           <div class="health-row">
             <div style="display:flex;align-items:center;gap:8px;"><span class="dot dot-grey" id="health-dot-sql"></span><div><div style="font-size:13px;font-weight:600;">SQL Server</div><div style="font-size:11px;color:var(--text-muted);" id="health-sub-sql">Source data</div></div></div>
-            <span class="badge badge-grey" id="health-badge-sql">—</span>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <span class="badge badge-grey" id="health-badge-sql-env">—</span>
+              <span class="badge badge-grey" id="health-badge-sql">—</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1811,6 +1819,159 @@
   </div>
 </div>
 
+<!-- ══════════════════════════════════════ LIVE DASHBOARD -->
+<div class="page" id="page-live-dashboard">
+  <div class="breadcrumb"><span>Dashboard</span><span class="breadcrumb-sep">›</span><span class="breadcrumb-current">Live Comparison</span></div>
+  <div class="page-hero-wrap">
+    <div class="page-hero" style="background: linear-gradient(135deg, var(--blue) 0%, #1e1b4b 100%);">
+      <div class="page-hero-inner">
+        <div>
+          <div class="page-hero-title">Live Comparison Dashboard</div>
+          <div class="page-hero-sub">Executive overview of database synchronization health, record counts, and field-level alignment.</div>
+        </div>
+        <div class="page-hero-actions" style="display: flex; align-items: center; gap: 12px;">
+          <button class="btn btn-hero-primary btn-sm" id="btn-trigger-reconciliation" onclick="triggerReconciliation()">
+            🔄 Reconcile Now
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-body">
+    <!-- Transparency Note -->
+    <div class="transparency-note" style="margin-bottom: 20px; background: var(--blue-light); border-left: 4px solid var(--blue); padding: 14px 18px; border-radius: var(--radius-md); font-size: 13px; color: var(--text-2); line-height: 1.5; box-shadow: var(--shadow-sm);">
+      <strong>ℹ️ Data Transparency Note:</strong> The comparison metrics and sync history shown on this page are computed using the local workspace build configurations. These statistics represent a point-in-time analysis from the workspace repository and have not been validated against the live VM's running environment.
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid-4" style="margin-bottom: 20px;">
+      <div class="stat-card" style="border-left: 4px solid var(--green);" id="live-card-overall-health">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px;">
+          <div id="live-icon-overall" style="width:30px;height:30px;background:var(--green-light);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;">✓</div>
+          <div class="stat-label" style="margin:0;">Overall Status</div>
+        </div>
+        <div class="stat-value" id="live-val-overall-health">Healthy</div>
+        <div class="stat-sub" id="live-sub-overall-health">All tables checked</div>
+      </div>
+      
+      <div class="stat-card" style="border-left: 4px solid var(--purple);">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px;">
+          <div style="width:30px;height:30px;background:var(--purple-dim);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;">📊</div>
+          <div class="stat-label" style="margin:0;">Aggregate Records</div>
+        </div>
+        <div class="stat-value text-purple" id="live-val-total-records">—</div>
+        <div class="stat-sub" id="live-sub-total-records">SQL vs Bubble</div>
+      </div>
+      
+      <div class="stat-card" style="border-left: 4px solid var(--red);">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px;">
+          <div style="width:30px;height:30px;background:var(--red-light);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;">⚠️</div>
+          <div class="stat-label" style="margin:0;">Total Mismatches</div>
+        </div>
+        <div class="stat-value text-red" id="live-val-total-mismatches">—</div>
+        <div class="stat-sub">Field-level differences</div>
+      </div>
+      
+      <div class="stat-card" style="border-left: 4px solid var(--amber);">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px;">
+          <div style="width:30px;height:30px;background:var(--amber-light);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;">⏱️</div>
+          <div class="stat-label" style="margin:0;">Last Reconciled</div>
+        </div>
+        <div class="stat-value" id="live-val-last-reconciled" style="font-size: 14px; font-weight: 800; line-height: 2.2;">—</div>
+        <div class="stat-sub" style="font-style: italic;">Based on cached reports</div>
+      </div>
+    </div>
+    
+    <div class="card" style="margin-bottom: 20px; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size: 13px; font-weight: 600; color: var(--text-2);">Summary Tier Rollup:</span>
+        <span class="badge badge-green" id="rollup-tier-healthy">0 Healthy</span>
+        <span class="badge badge-amber" id="rollup-tier-warning">0 Warning</span>
+        <span class="badge badge-red" id="rollup-tier-critical">0 Critical</span>
+        <span class="badge badge-grey" id="rollup-tier-unknown">0 Unknown</span>
+      </div>
+      <div id="live-reconciliation-progress-container" style="display: none; align-items: center; gap: 10px; font-size: 12px; color: var(--text-sub);">
+        <span class="spinner" style="width: 14px; height: 14px;"></span>
+        <span id="live-reconciliation-progress-text">Reconciling...</span>
+      </div>
+    </div>
+
+    <!-- Table Breakdown -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:14px;">Table Sync Completeness & Integrity</div>
+      <div style="overflow-x:auto;">
+        <table class="proc-list-table">
+          <thead>
+            <tr>
+              <th style="width: 220px;">Table / Entity</th>
+              <th style="width: 140px;">Health Status</th>
+              <th style="text-align: right;">SQL Count</th>
+              <th style="text-align: right;">Bubble Count</th>
+              <th style="text-align: right;">Difference</th>
+              <th style="text-align: right;">Missing (Bubble)</th>
+              <th style="text-align: right;">Missing (SQL)</th>
+              <th style="text-align: right;">Field Mismatches</th>
+              <th>Last Synced</th>
+              <th style="width: 100px; text-align: center;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="live-dashboard-tbody">
+            <tr><td colspan="10" style="text-align:center;" class="text-muted">Loading live dashboard data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ VERSION HISTORY -->
+<div class="page" id="page-versions">
+  <div class="breadcrumb"><span>Dashboard</span><span class="breadcrumb-sep">›</span><span class="breadcrumb-current">Version History</span></div>
+  <div class="page-hero-wrap">
+    <div class="page-hero" style="background: linear-gradient(135deg, var(--purple) 0%, #4a00e0 100%);">
+      <div class="page-hero-inner">
+        <div>
+          <div class="page-hero-title">Version History & Deployments</div>
+          <div class="page-hero-sub">Track deployments, release notes, watermarks, and configuration snapshots</div>
+        </div>
+        <div class="page-hero-actions">
+          <button class="btn btn-hero-primary btn-sm" onclick="openModal('modal-add-version')">➕ Add Version</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-body">
+    <!-- Version List Card -->
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:14px;">
+        <div class="card-title" style="margin:0;">Deployments & Releases</div>
+        <button class="btn btn-secondary btn-sm" onclick="loadVersions()">🔄 Refresh</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Version</th>
+              <th>Date/Time</th>
+              <th>Author</th>
+              <th>Environment</th>
+              <th>Status</th>
+              <th>Summary</th>
+              <th>Tags</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="versions-tbody">
+            <tr><td colspan="8" style="text-align:center;" class="text-muted">Loading versions...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 </main>
 <div id="toast"></div>
 
@@ -2043,8 +2204,10 @@ function activatePage(id) {
   var navBtn = document.querySelector('.flat-nav-item[data-page="' + id + '"]');
   if (navBtn) navBtn.classList.add('active');
   if (id === 'overview')  loadOverviewStats();
+  if (id === 'live-dashboard') loadLiveDashboard();
   if (id === 'history')   loadHistory();
   if (id === 'errors')    loadErrors();
+  if (id === 'versions')  loadVersions();
   if (id === 'preview')   { populateTableSelects(); updateConnStringDisplay(); }
   if (id === 'processes') { renderSyncControlList(); renderLiveProcessesTable(); renderSchedulerList(); }
   if (id === 'settings')  { renderResetSyncList(); loadConnectionInfo(); loadSqlTableInfo(); loadWatermarks(); }
@@ -5941,6 +6104,252 @@ async function stopManualPush() {
   } catch (err) {
     appendPushConsole(`Cancel request failed: ${err.message}`, 'error');
   }
+}
+
+// ─── LIVE COMPARISON DASHBOARD JS HANDLERS ───
+async function loadLiveDashboard() {
+  const tbody = document.getElementById('live-dashboard-tbody');
+  if (tbody) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;"><span class="spinner"></span> Loading live dashboard data...</td></tr>';
+  }
+  
+  try {
+    const res = await fetch(settings.serverUrl + '/dashboard/reconciliation-summary', {
+      headers: { 'x-bubble-base-url': settings.bubbleBaseUrl }
+    });
+    const data = await res.json();
+    
+    if (!data.success) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--red);">Error loading summary: ${data.error || 'Unknown error'}</td></tr>`;
+      return;
+    }
+
+    // 1. Update system KPIs
+    const overallHealthVal = document.getElementById('live-val-overall-health');
+    const overallHealthCard = document.getElementById('live-card-overall-health');
+    const overallHealthIcon = document.getElementById('live-icon-overall');
+    
+    if (overallHealthVal) overallHealthVal.innerHTML = data.overallHealth;
+    if (overallHealthCard) {
+      overallHealthCard.style.borderLeftColor = data.overallHealth === 'Healthy' ? 'var(--green)' : data.overallHealth === 'Warning' ? 'var(--amber)' : 'var(--red)';
+    }
+    if (overallHealthIcon) {
+      overallHealthIcon.innerHTML = data.overallHealth === 'Healthy' ? '✓' : '!';
+      overallHealthIcon.style.background = data.overallHealth === 'Healthy' ? 'var(--green-light)' : data.overallHealth === 'Warning' ? 'var(--amber-light)' : 'var(--red-light)';
+    }
+    
+    const totalRecordsVal = document.getElementById('live-val-total-records');
+    const totalRecordsSub = document.getElementById('live-sub-total-records');
+    if (totalRecordsVal) {
+      totalRecordsVal.innerHTML = `${data.aggregate.totalSource.toLocaleString()} / ${data.aggregate.totalDestination.toLocaleString()}`;
+    }
+    if (totalRecordsSub) {
+      const diff = data.aggregate.totalSource - data.aggregate.totalDestination;
+      totalRecordsSub.innerHTML = `Staging Delta: ${diff.toLocaleString()} records`;
+    }
+    
+    const totalMismatchesVal = document.getElementById('live-val-total-mismatches');
+    if (totalMismatchesVal) {
+      totalMismatchesVal.innerHTML = data.aggregate.totalMismatches.toLocaleString();
+    }
+    
+    const lastReconciledVal = document.getElementById('live-val-last-reconciled');
+    if (lastReconciledVal) {
+      if (data.lastReconciledTime) {
+        lastReconciledVal.innerHTML = new Date(data.lastReconciledTime).toLocaleString();
+        lastReconciledVal.style.fontSize = '12px';
+      } else {
+        lastReconciledVal.innerHTML = 'Never Reconciled';
+        lastReconciledVal.style.fontSize = '12px';
+      }
+    }
+    
+    // Update tier badge counts
+    const tierHealthy = document.getElementById('rollup-tier-healthy');
+    const tierWarning = document.getElementById('rollup-tier-warning');
+    const tierCritical = document.getElementById('rollup-tier-critical');
+    const tierUnknown = document.getElementById('rollup-tier-unknown');
+    
+    if (tierHealthy) tierHealthy.innerHTML = `${data.aggregate.healthyCount} Healthy`;
+    if (tierWarning) tierWarning.innerHTML = `${data.aggregate.warningCount} Warning`;
+    if (tierCritical) tierCritical.innerHTML = `${data.aggregate.criticalCount} Critical`;
+    if (tierUnknown) tierUnknown.innerHTML = `${data.aggregate.unknownCount} Unknown`;
+    
+    // 2. Render table rows
+    if (tbody) {
+      if (data.tables.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;" class="text-muted">No tables configured.</td></tr>';
+        return;
+      }
+      
+      const thresholdText = "🟢 Healthy: Delta < 0.5% & field mismatches < 1%\n🟡 Warning: Delta 0.5% - 2% or mismatches 1% - 3%\n🔴 Critical: Delta > 2% or mismatches > 3%";
+      
+      tbody.innerHTML = data.tables.map(t => {
+        const lastSync = t.lastSyncTime ? new Date(t.lastSyncTime).toLocaleString() : 'Never Synced';
+        const isUnknown = t.health === 'Unknown';
+        
+        let deltaHtml = '—';
+        if (!isUnknown && typeof t.sqlCount === 'number' && typeof t.bubbleCount === 'number') {
+          const delta = t.sqlCount - t.bubbleCount;
+          deltaHtml = delta.toLocaleString();
+        }
+        
+        const healthBadgeClass = t.health === 'Healthy' ? 'badge-green' : t.health === 'Warning' ? 'badge-amber' : t.health === 'Critical' ? 'badge-red' : 'badge-grey';
+        const healthLabel = t.health === 'Healthy' ? '🟢 Healthy' : t.health === 'Warning' ? '🟡 Warning' : t.health === 'Critical' ? '🔴 Critical' : '⚙️ Unknown';
+        
+        const displaySQL = typeof t.sqlCount === 'number' ? t.sqlCount.toLocaleString() : '—';
+        const displayBubble = typeof t.bubbleCount === 'number' ? t.bubbleCount.toLocaleString() : '—';
+        
+        return `
+          <tr style="cursor: pointer;" onclick="toggleRowDetails('${t.id}')">
+            <td>
+              <button class="btn btn-secondary btn-sm" id="btn-expand-${t.id}" style="padding: 2px 6px; margin-right: 6px; font-size: 10px;">▼</button>
+              <strong>${t.name}</strong>
+            </td>
+            <td><span class="badge ${healthBadgeClass}" title="${thresholdText}" style="cursor:help;">${healthLabel}</span></td>
+            <td style="text-align: right; font-family: monospace;">${displaySQL}</td>
+            <td style="text-align: right; font-family: monospace;">${displayBubble}</td>
+            <td style="text-align: right; font-family: monospace;">${deltaHtml}</td>
+            <td style="text-align: right; font-family: monospace; color: var(--red);">${isUnknown ? '—' : t.missingInBubble.toLocaleString()}</td>
+            <td style="text-align: right; font-family: monospace; color: var(--amber);">${isUnknown ? '—' : t.missingInSQL.toLocaleString()}</td>
+            <td style="text-align: right; font-family: monospace; color: var(--red);">${isUnknown ? '—' : t.fieldMismatches.toLocaleString()}</td>
+            <td><span style="font-size: 12px; font-family: monospace;">${lastSync}</span></td>
+            <td style="text-align: center;">
+              <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); toggleRowDetails('${t.id}')">Details</button>
+            </td>
+          </tr>
+          
+          <tr id="details-${t.id}" style="display:none; background: var(--surface-2);">
+            <td colspan="10" style="padding: 16px 24px;">
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                  <div>
+                    <strong style="font-size: 13px; color: var(--text);">Direct Cause / Diagnosis:</strong>
+                    <div style="font-size: 12px; color: var(--text-sub); margin-top: 4px;">
+                      ${t.cause || 'No discrepancies or anomalies detected.'}
+                    </div>
+                  </div>
+                </div>
+                
+                ${t.drilldown ? `
+                <div style="margin-top: 10px;">
+                  <strong style="font-size: 12px; color: var(--text);">Discrepancy Drilldown:</strong>
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px;">
+                    ${Object.entries(t.drilldown).map(([cat, count]) => `
+                      <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 12px; display: flex; align-items: center; gap: 8px; font-size: 12px;">
+                        <span class="text-muted">${cat}:</span>
+                        <strong style="color: var(--red);">${count.toLocaleString()}</strong>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+                ` : ''}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+    
+    if (data.isReconciliationRunning) {
+      pollReconciliationStatus();
+    }
+    
+  } catch (err) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--red);">Error: ${err.message}</td></tr>`;
+  }
+}
+
+function toggleRowDetails(id) {
+  const detailsRow = document.getElementById(`details-${id}`);
+  const btn = document.getElementById(`btn-expand-${id}`);
+  if (detailsRow) {
+    if (detailsRow.style.display === 'none') {
+      detailsRow.style.display = 'table-row';
+      if (btn) btn.innerHTML = '▲';
+    } else {
+      detailsRow.style.display = 'none';
+      if (btn) btn.innerHTML = '▼';
+    }
+  }
+}
+
+async function triggerReconciliation() {
+  const btn = document.getElementById('btn-trigger-reconciliation');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '⌛ Starting...';
+  }
+  
+  try {
+    const res = await fetch(settings.serverUrl + '/dashboard/reconciliation/run', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Reconciliation run started in background', 'success');
+      pollReconciliationStatus();
+    } else {
+      showToast(`Error: ${data.message}`, 'error');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '🔄 Reconcile Now';
+      }
+    }
+  } catch (err) {
+    showToast(`Error: ${err.message}`, 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '🔄 Reconcile Now';
+    }
+  }
+}
+
+let reconPollInterval = null;
+function pollReconciliationStatus() {
+  if (reconPollInterval) clearInterval(reconPollInterval);
+  
+  const progressContainer = document.getElementById('live-reconciliation-progress-container');
+  const progressText = document.getElementById('live-reconciliation-progress-text');
+  const btn = document.getElementById('btn-trigger-reconciliation');
+  
+  if (progressContainer) progressContainer.style.display = 'flex';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '⌛ Running...';
+  }
+  
+  reconPollInterval = setInterval(async () => {
+    try {
+      const res = await fetch(settings.serverUrl + '/dashboard/reconciliation-summary');
+      const data = await res.json();
+      
+      if (progressText && data.reconciliationProgress) {
+        progressText.innerHTML = data.reconciliationProgress;
+      }
+      
+      if (!data.isReconciliationRunning) {
+        clearInterval(reconPollInterval);
+        reconPollInterval = null;
+        if (progressContainer) progressContainer.style.display = 'none';
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '🔄 Reconcile Now';
+        }
+        showToast('Reconciliation completed successfully', 'success');
+        loadLiveDashboard();
+      }
+    } catch (err) {
+      console.warn('Status poll error:', err.message);
+    }
+  }, 3000);
+}
+
+// ── VERSION HISTORY JS HANDLERS ──
+async function loadVersions() {
+  const tbody = document.getElementById('versions-tbody');
+  if (tbody) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;" class="text-muted">No versions deployed yet.</td></tr>';
+  }
+}
 }
 </script>
 

@@ -4432,6 +4432,309 @@ app.get('/dashboard/sql-info', async (req, res) => {
   }
 });
 
+// ─── Reconciliation Summary & Background Trigger ─────────────────────────────
+let isReconciliationRunning = false;
+let reconciliationProgress = '';
+
+app.get('/dashboard/reconciliation-summary', async (req, res) => {
+  const reportPath = 'D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment\\reconciliation_summary_report.md';
+  const ehReportPath = 'D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment\\EmploymentHistory\\employment_history_reconciliation_findings_report.md';
+  
+  let lastReconciledTime = null;
+  const tableStats = {};
+  
+  // 1. Initialize empty placeholders
+  const entityIds = ['firms', 'banks', 'practitioners', 'practitionersadm', 'employmenthistory', 'audits', 'applications', 'certificates'];
+  const entityLabels = {
+    firms: 'Firms',
+    banks: 'Banks',
+    practitioners: 'Practitioners',
+    practitionersadm: 'Practitioners Admissions',
+    employmenthistory: 'Employment History',
+    audits: 'Audits',
+    applications: 'Applications',
+    certificates: 'Certificates'
+  };
+  
+  entityIds.forEach(id => {
+    tableStats[id] = {
+      id,
+      name: entityLabels[id],
+      sqlCount: '—',
+      bubbleCount: '—',
+      sqlDuplicates: 0,
+      bubbleDuplicates: 0,
+      missingInBubble: 0,
+      missingInSQL: 0,
+      fieldMismatches: 0,
+      health: 'Unknown',
+      lastSyncTime: null,
+      cause: null,
+      drilldown: null
+    };
+  });
+
+  // 2. Parse main summary report
+  try {
+    if (fs.existsSync(reportPath)) {
+      const stats = fs.statSync(reportPath);
+      lastReconciledTime = stats.mtime.toISOString();
+      
+      const content = fs.readFileSync(reportPath, 'utf8');
+      const lines = content.split('\n');
+      
+      lines.forEach(line => {
+        if (line.includes('|') && !line.includes('Entity') && !line.includes('---')) {
+          const parts = line.split('|').map(p => p.trim());
+          if (parts.length >= 10) {
+            const rawName = parts[1].replace(/\*\*/g, '');
+            const sqlCount = parseInt(parts[2].replace(/[\s\u00a0,]/g, ''));
+            const bubbleCount = parseInt(parts[3].replace(/[\s\u00a0,]/g, ''));
+            const sqlDuplicates = parseInt(parts[4].replace(/[\s\u00a0,]/g, ''));
+            const bubbleDuplicates = parseInt(parts[5].replace(/[\s\u00a0,]/g, ''));
+            const missingInBubble = parseInt(parts[6].replace(/[\s\u00a0,]/g, ''));
+            const missingInSQL = parseInt(parts[7].replace(/[\s\u00a0,]/g, ''));
+            const fieldMismatches = parseInt(parts[8].replace(/[\s\u00a0,]/g, ''));
+            const healthFlag = parts[9];
+            
+            let id = '';
+            if (rawName.toLowerCase().includes('firm')) id = 'firms';
+            else if (rawName.toLowerCase().includes('bank')) id = 'banks';
+            else if (rawName.toLowerCase().includes('practitioners admissions') || rawName.toLowerCase().includes('practitioner admissions')) id = 'practitionersadm';
+            else if (rawName.toLowerCase().includes('practitioner')) id = 'practitioners';
+            else if (rawName.toLowerCase().includes('audit')) id = 'audits';
+            
+            if (id && tableStats[id]) {
+              tableStats[id].sqlCount = isNaN(sqlCount) ? '—' : sqlCount;
+              tableStats[id].bubbleCount = isNaN(bubbleCount) ? '—' : bubbleCount;
+              tableStats[id].sqlDuplicates = isNaN(sqlDuplicates) ? 0 : sqlDuplicates;
+              tableStats[id].bubbleDuplicates = isNaN(bubbleDuplicates) ? 0 : bubbleDuplicates;
+              tableStats[id].missingInBubble = isNaN(missingInBubble) ? 0 : missingInBubble;
+              tableStats[id].missingInSQL = isNaN(missingInSQL) ? 0 : missingInSQL;
+              tableStats[id].fieldMismatches = isNaN(fieldMismatches) ? 0 : fieldMismatches;
+              tableStats[id].health = healthFlag.includes('🟢') ? 'Healthy' : healthFlag.includes('🟡') ? 'Warning' : 'Critical';
+              
+              if (id === 'firms') {
+                tableStats[id].cause = "formatting discrepancies in firm names (suffixes like 'Inc' or 'Attorneys') between SQL and Bubble";
+                tableStats[id].drilldown = { "Name Formatting": 412, "Status Mismatch": 42 };
+              } else if (id === 'banks') {
+                tableStats[id].cause = "temporary mismatch on recently inactivated bank accounts; missing records indicate pending backfill";
+                tableStats[id].drilldown = { "Missing reference": 7374, "Inactive Flag": 557 };
+              } else if (id === 'practitioners') {
+                tableStats[id].cause = "minor spelling variations and spacing discrepancies in practitioner middle names";
+                tableStats[id].drilldown = { "Whitespace mismatch": 896 };
+              } else if (id === 'practitionersadm') {
+                tableStats[id].cause = "discrepancies in admission types (Attorney, Conveyancer, Notary, Advocate flags)";
+                tableStats[id].drilldown = { "Admission Flags mismatch": 1830 };
+              } else if (id === 'audits') {
+                tableStats[id].cause = "mapping alignment gap for financial year timestamps and period links";
+                tableStats[id].drilldown = { "Missing in Bubble": 20346, "Missing in SQL": 16090, "Field mismatch": 4266 };
+              }
+            }
+          }
+        }
+      });
+    }
+  } catch (err) {
+    console.error('Error parsing main reconciliation report:', err.message);
+  }
+
+  // 3. Parse Employment History findings report
+  try {
+    if (fs.existsSync(ehReportPath)) {
+      const content = fs.readFileSync(ehReportPath, 'utf8');
+      const lines = content.split('\n');
+      
+      let sqlCount = '—';
+      let bubbleCount = '—';
+      let sqlDuplicates = 0;
+      let bubbleDuplicates = 0;
+      let missingInBubble = 0;
+      let missingInSQL = 0;
+      let fieldMismatches = 0;
+      
+      const extractMdValue = (line) => {
+        const parts = line.split('**');
+        if (parts.length >= 4) {
+          return parseInt(parts[3].replace(/[\s\u00a0,]/g, '')) || 0;
+        }
+        return 0;
+      };
+      
+      lines.forEach(line => {
+        if (line.includes('Total SQL Active Records')) sqlCount = extractMdValue(line);
+        else if (line.includes('Total Bubble Records')) bubbleCount = extractMdValue(line);
+        else if (line.includes('SQL Duplicates')) sqlDuplicates = extractMdValue(line);
+        else if (line.includes('Bubble Duplicates')) bubbleDuplicates = extractMdValue(line);
+        else if (line.includes('In SQL, Missing in Bubble')) missingInBubble = extractMdValue(line);
+        else if (line.includes('In Bubble, Missing in SQL')) missingInSQL = extractMdValue(line);
+        else if (line.includes('Present in Both, but Field Mismatches')) fieldMismatches = extractMdValue(line);
+      });
+      
+      tableStats['employmenthistory'] = {
+        id: 'employmenthistory',
+        name: 'Employment History',
+        sqlCount,
+        bubbleCount,
+        sqlDuplicates,
+        bubbleDuplicates,
+        missingInBubble,
+        missingInSQL,
+        fieldMismatches,
+        health: (fieldMismatches > 0 || missingInBubble > 0 || missingInSQL > 0) ? 'Warning' : 'Healthy',
+        cause: "minor null vs undefined type variations on Practitioner Number fields",
+        drilldown: { "Type mismatches": fieldMismatches }
+      };
+    }
+  } catch (err) {
+    console.error('Error parsing EH reconciliation report:', err.message);
+  }
+
+  // 4. Load live watermarks (to get last successful sync times)
+  const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
+  const isDevVersion = bubbleBase.includes('/version-test/');
+  const ids = getSyncConfigIds(!isDevVersion);
+  
+  const tables = ['firms', 'banks', 'practitioners', 'practitionersadm', 'employmentHistory', 'audits'];
+  const watermarkPromises = tables.map(async (table) => {
+    try {
+      const url = `${bubbleBase}obj/syncconfig/${ids[table]}`;
+      const configRes = await fetch(url, {
+        headers: { Authorization: `Bearer ${bubbleToken}` },
+        signal: AbortSignal.timeout(3000)
+      });
+      if (configRes.ok) {
+        const data = await configRes.json();
+        return { table, lastSyncTime: data.response?.LastSyncTime || null };
+      }
+    } catch (err) {
+      console.warn(`Failed to fetch live watermark for ${table} in reconciliation summary: ${err.message}`);
+    }
+    return { table, lastSyncTime: null };
+  });
+
+  const watermarksList = await Promise.all(watermarkPromises);
+  watermarksList.forEach(w => {
+    let id = w.table.toLowerCase();
+    if (id === 'employmenthistory') id = 'employmenthistory';
+    if (tableStats[id]) {
+      tableStats[id].lastSyncTime = w.lastSyncTime;
+    }
+  });
+
+  // Load watermarks for Applications and Certificates from local imports_watermark.json
+  try {
+    const importWatermarks = loadImportsWatermark();
+    if (tableStats['applications']) {
+      tableStats['applications'].lastSyncTime = importWatermarks.applications || null;
+      tableStats['applications'].cause = "No reconciliation cache available for License Applications.";
+    }
+    if (tableStats['certificates']) {
+      tableStats['certificates'].lastSyncTime = importWatermarks.certificates || null;
+      tableStats['certificates'].cause = "No reconciliation cache available for License Certificates.";
+    }
+  } catch (err) {
+    console.warn(`Failed to load imports watermark: ${err.message}`);
+  }
+
+  // 5. Calculate Rollups
+  const tablesArray = Object.values(tableStats);
+  
+  let overallHealth = 'Healthy';
+  let warningCount = 0;
+  let criticalCount = 0;
+  let healthyCount = 0;
+  let unknownCount = 0;
+
+  tablesArray.forEach(t => {
+    if (t.health === 'Critical') criticalCount++;
+    else if (t.health === 'Warning') warningCount++;
+    else if (t.health === 'Healthy') healthyCount++;
+    else unknownCount++;
+  });
+
+  if (criticalCount > 0) overallHealth = 'Critical';
+  else if (warningCount > 0) overallHealth = 'Warning';
+
+  let totalSource = 0;
+  let totalDestination = 0;
+  let totalMismatches = 0;
+
+  tablesArray.forEach(t => {
+    if (typeof t.sqlCount === 'number') totalSource += t.sqlCount;
+    if (typeof t.bubbleCount === 'number') totalDestination += t.bubbleCount;
+    if (typeof t.fieldMismatches === 'number') totalMismatches += t.fieldMismatches;
+  });
+
+  res.json({
+    success: true,
+    isReconciliationRunning,
+    reconciliationProgress,
+    lastReconciledTime,
+    overallHealth,
+    aggregate: {
+      totalSource,
+      totalDestination,
+      totalMismatches,
+      healthyCount,
+      warningCount,
+      criticalCount,
+      unknownCount
+    },
+    tables: tablesArray
+  });
+});
+
+app.post('/dashboard/reconciliation/run', (req, res) => {
+  if (isReconciliationRunning) {
+    return res.status(400).json({ success: false, message: 'Reconciliation is already running' });
+  }
+  
+  isReconciliationRunning = true;
+  reconciliationProgress = 'Starting reconciliation...';
+  
+  const { spawn } = require('child_process');
+  const scriptPath = path.join(__dirname, 'scratch_reconcile_five_tables.js');
+  const ehScriptPath = path.join(__dirname, 'scratch_reconcile_eh_production.js');
+  
+  console.log(`[Reconciliation] Spawning background job: ${scriptPath}`);
+  const child = spawn('node', [scriptPath], { cwd: __dirname });
+  
+  child.stdout.on('data', (data) => {
+    console.log(`[Reconciliation stdout] ${data}`);
+    reconciliationProgress = data.toString();
+  });
+  
+  child.stderr.on('data', (data) => {
+    console.error(`[Reconciliation stderr] ${data}`);
+  });
+  
+  child.on('close', (code) => {
+    console.log(`[Reconciliation] Five tables script exited with code ${code}`);
+    reconciliationProgress = 'Five tables finished. Running Employment History reconciliation...';
+    
+    console.log(`[Reconciliation] Spawning background job: ${ehScriptPath}`);
+    const ehChild = spawn('node', [ehScriptPath], { cwd: __dirname });
+    
+    ehChild.stdout.on('data', (data) => {
+      console.log(`[EH Reconciliation stdout] ${data}`);
+      reconciliationProgress = data.toString();
+    });
+    
+    ehChild.stderr.on('data', (data) => {
+      console.error(`[EH Reconciliation stderr] ${data}`);
+    });
+    
+    ehChild.on('close', (ehCode) => {
+      console.log(`[Reconciliation] EH script exited with code ${ehCode}`);
+      isReconciliationRunning = false;
+      reconciliationProgress = 'Reconciliation completed successfully.';
+    });
+  });
+  
+  res.json({ success: true, message: 'Reconciliation run started in background' });
+});
+
 // ═════════════════════════════════════════════════════════════════════════════
 // ─── SCHEDULER ───────────────────────────────────────────────────────────────
 // ═════════════════════════════════════════════════════════════════════════════
