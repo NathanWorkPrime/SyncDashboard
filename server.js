@@ -4622,19 +4622,81 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
     }
   });
 
-  // Load watermarks for Applications and Certificates from local imports_watermark.json
+  // Load live counts and watermarks for Applications and Certificates
+  let appSqlCount = 0;
+  let certSqlCount = 0;
+  let appBubbleCount = 0;
+  let certBubbleCount = 0;
+
   try {
-    const importWatermarks = loadImportsWatermark();
-    if (tableStats['applications']) {
-      tableStats['applications'].lastSyncTime = importWatermarks.applications || null;
-      tableStats['applications'].cause = "No reconciliation cache available for License Applications.";
+    const importsSqlConfig = {
+      user: process.env.IMPORTS_SQL_USER || process.env.SQL_USER,
+      password: process.env.IMPORTS_SQL_PASSWORD || process.env.SQL_PASSWORD,
+      server: process.env.IMPORTS_SQL_SERVER || process.env.SQL_SERVER,
+      port: parseInt(process.env.IMPORTS_SQL_PORT || process.env.SQL_PORT || '1433'),
+      database: 'PRODUCTION',
+      options: {
+        encrypt: true,
+        trustServerCertificate: true,
+        connectTimeout: 5000,
+        requestTimeout: 10000
+      }
+    };
+    
+    const importsPool = await sql.connect(importsSqlConfig);
+    const [appRes, certRes] = await Promise.all([
+      importsPool.query('SELECT COUNT(*) AS count FROM dbo.Lic_LicenseApplications'),
+      importsPool.query('SELECT COUNT(*) AS count FROM dbo.Lic_Licenses')
+    ]);
+    appSqlCount = appRes.recordset[0].count;
+    certSqlCount = certRes.recordset[0].count;
+    await importsPool.close();
+  } catch (err) {
+    console.error('Error fetching live SQL counts for Applications/Certificates:', err.message);
+  }
+
+  try {
+    const [appRes, certRes] = await Promise.all([
+      fetch(`${bubbleBase}obj/lpff.application.view?limit=1`, {
+        headers: { Authorization: `Bearer ${bubbleToken}` },
+        signal: AbortSignal.timeout(3000)
+      }).then(r => r.json()),
+      fetch(`${bubbleBase}obj/lpff.certificates.view?limit=1`, {
+        headers: { Authorization: `Bearer ${bubbleToken}` },
+        signal: AbortSignal.timeout(3000)
+      }).then(r => r.json())
+    ]);
+
+    if (appRes.response) {
+      appBubbleCount = (appRes.response.count || 0) + (appRes.response.remaining || 0);
     }
-    if (tableStats['certificates']) {
-      tableStats['certificates'].lastSyncTime = importWatermarks.certificates || null;
-      tableStats['certificates'].cause = "No reconciliation cache available for License Certificates.";
+    if (certRes.response) {
+      certBubbleCount = (certRes.response.count || 0) + (certRes.response.remaining || 0);
     }
   } catch (err) {
-    console.warn(`Failed to load imports watermark: ${err.message}`);
+    console.error('Error fetching live Bubble counts for Applications/Certificates:', err.message);
+  }
+
+  try {
+    const importWatermarks = loadImportsWatermark();
+    
+    if (tableStats['applications']) {
+      tableStats['applications'].sqlCount = appSqlCount;
+      tableStats['applications'].bubbleCount = appBubbleCount;
+      tableStats['applications'].lastSyncTime = importWatermarks.applications || null;
+      tableStats['applications'].health = (appSqlCount === 0 && appBubbleCount === 0) ? 'Healthy' : (Math.abs(appSqlCount - appBubbleCount) / (appSqlCount || 1) > 0.02) ? 'Critical' : 'Warning';
+      tableStats['applications'].cause = "Comparison represents a basic live count check. High delta is expected due to year-specific sync filters.";
+    }
+    
+    if (tableStats['certificates']) {
+      tableStats['certificates'].sqlCount = certSqlCount;
+      tableStats['certificates'].bubbleCount = certBubbleCount;
+      tableStats['certificates'].lastSyncTime = importWatermarks.certificates || null;
+      tableStats['certificates'].health = (certSqlCount === 0 && certBubbleCount === 0) ? 'Healthy' : (Math.abs(certSqlCount - certBubbleCount) / (certSqlCount || 1) > 0.02) ? 'Critical' : 'Warning';
+      tableStats['certificates'].cause = "Comparison represents a basic live count check. High delta is expected due to year-specific sync filters.";
+    }
+  } catch (err) {
+    console.warn(`Failed to load imports watermark/counts: ${err.message}`);
   }
 
   // 5. Calculate Rollups
