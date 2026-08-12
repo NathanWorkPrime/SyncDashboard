@@ -1127,6 +1127,7 @@ async function doSyncProductionFirms(topLimit = 5, trigger = 'manual', bubbleBas
       errors: errors
     });
 
+    runSingleTableReconciliation('firms').catch(err => console.error('Firms background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
   } finally {
     if (syncId) unregisterSync(syncId);
@@ -1642,6 +1643,7 @@ async function doSyncProductionBanks(topLimit = 5, trigger = 'manual', bubbleBas
       errors: errors
     });
 
+    runSingleTableReconciliation('banks').catch(err => console.error('Banks background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
   } finally {
     if (syncId) unregisterSync(syncId);
@@ -2199,6 +2201,7 @@ async function doSyncProductionPractitioners(topLimit = 5, trigger = 'manual', b
       errors: errors
     });
 
+    runSingleTableReconciliation('practitioners').catch(err => console.error('Practitioners background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
   } finally {
     if (syncId) unregisterSync(syncId);
@@ -2683,6 +2686,7 @@ async function doSyncProductionPractitionersAdm(topLimit = 5, trigger = 'manual'
       errors: errors
     });
 
+    runSingleTableReconciliation('practitionersadm').catch(err => console.error('PractitionersAdm background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
   } finally {
     if (syncId) unregisterSync(syncId);
@@ -3183,6 +3187,7 @@ async function doSyncProductionEmploymentHistory(topLimit = 5, trigger = 'manual
       errors: errors
     });
 
+    runSingleTableReconciliation('employmenthistory').catch(err => console.error('EmploymentHistory background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
   } finally {
     if (pool) await pool.close();
@@ -3675,6 +3680,7 @@ async function doSyncProductionAudits(topLimit = 5, trigger = 'manual', bubbleBa
       errors: errors
     });
 
+    runSingleTableReconciliation('audits').catch(err => console.error('Audits background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
   } finally {
     if (syncId) unregisterSync(syncId);
@@ -4447,6 +4453,147 @@ const ACCEPTED_MISMATCHES = {
   certificates: 0
 };
 
+// Live counts cache
+let LIVE_COUNTS_CACHE = {
+  data: null,
+  expiresAt: 0
+};
+const CACHE_TTL_MS = 60000; // 60 seconds
+
+// Mapping each table to its queries and normalization functions
+const RECON_CONFIG = {
+  firms: {
+    cacheFile: '.cache_lpff.firms.view.json',
+    sqlQuery: `SELECT Id, Aff_FirmNo as firm_number, Name as name, Frwk_InactiveFlag as inactive 
+               FROM dbo.Core_Organisations 
+               WHERE Frwk_Discriminator = 'Aff.Firm'`,
+    getSqlKey: r => String(r.firm_number || '').trim(),
+    getBubbleKey: r => String(r['Firm Number'] || '').trim(),
+    checkDiffs: (s, b) => {
+      const diffs = [];
+      if (normalizeString(s.name) !== normalizeString(b['Firm Name'] || b.Name)) {
+        diffs.push('Name');
+      }
+      if (normalizeBoolean(s.inactive) !== normalizeBoolean(b.Inactive)) {
+        diffs.push('Inactive');
+      }
+      return diffs;
+    }
+  },
+  banks: {
+    cacheFile: '.cache_lpff.bankaccounts.view.json',
+    sqlQuery: `SELECT ba.Id as bank_id, ba.AccountNumber as account_number, ba.Frwk_InactiveFlag as inactive, org.Aff_FirmNo as firm_number
+               FROM dbo.Core_BankAccounts ba
+               LEFT JOIN dbo.Core_Organisations org ON ba.Aff_FirmId = org.Id`,
+    getSqlKey: r => String(r.bank_id || '').trim().toLowerCase(),
+    getBubbleKey: r => String(r['Id'] || r['id'] || '').trim().toLowerCase(),
+    checkDiffs: (s, b) => {
+      const diffs = [];
+      if (normalizeString(s.account_number) !== normalizeString(b['Account Number'])) {
+        diffs.push('AccountNumber');
+      }
+      if (normalizeString(s.firm_number) !== normalizeString(b['Firm Number'])) {
+        diffs.push('FirmNumber');
+      }
+      if (normalizeBoolean(s.inactive) !== normalizeBoolean(b.Inactive)) {
+        diffs.push('Inactive');
+      }
+      return diffs;
+    }
+  },
+  practitioners: {
+    cacheFile: '.cache_lpff.practitioner.view.json',
+    sqlQuery: `SELECT Id, Aff_PractitionerNo as practitioner_number, FullName as name, Frwk_InactiveFlag as inactive
+               FROM dbo.Core_Persons 
+               WHERE Frwk_Discriminator = 'Aff.Practitioner'`,
+    getSqlKey: r => String(r.practitioner_number || '').trim(),
+    getBubbleKey: r => String(r['Practitioner Number'] || '').trim(),
+    checkDiffs: (s, b) => {
+      const diffs = [];
+      if (normalizeString(s.name) !== normalizeString(b['Practitioner Name'] || b['Full Name'])) {
+        diffs.push('Name');
+      }
+      if (normalizeBoolean(s.inactive) !== normalizeBoolean(b.Inactive)) {
+        diffs.push('Inactive');
+      }
+      return diffs;
+    }
+  },
+  practitionersadm: {
+    cacheFile: '.cache_lpff.practitioner.view.json',
+    sqlQuery: `SELECT Id, Aff_PractitionerNo as practitioner_number, 
+                      Aff_IsAttorney as attorney, Aff_IsConveyancer as conveyancer,
+                      Aff_IsNotary as notary, Aff_IsAdvocate as advocate
+               FROM dbo.Core_Persons 
+               WHERE Frwk_Discriminator = 'Aff.Practitioner'`,
+    getSqlKey: r => String(r.practitioner_number || '').trim(),
+    getBubbleKey: r => String(r['Practitioner Number'] || '').trim(),
+    checkDiffs: (s, b) => {
+      const diffs = [];
+      if (normalizeBoolean(s.attorney) !== normalizeBoolean(b.Attorney)) diffs.push('Attorney');
+      if (normalizeBoolean(s.conveyancer) !== normalizeBoolean(b.Conveyancer)) diffs.push('Conveyancer');
+      if (normalizeBoolean(s.notary) !== normalizeBoolean(b.Notary)) diffs.push('Notary');
+      if (normalizeBoolean(s.advocate) !== normalizeBoolean(b.Advocate)) diffs.push('Advocate');
+      return diffs;
+    }
+  },
+  employmenthistory: {
+    cacheFile: '.cache_lpff.employment.history.view.json',
+    sqlQuery: `SELECT 
+                 cop.Id as id,
+                 p.Aff_PractitionerNo as memno,
+                 o.Aff_FirmNo as firmno,
+                 p.Lastname as lastname,
+                 p.Firstname as firstname,
+                 o.Name as firm_name,
+                 cop.Inactive as inactive,
+                 cop.ValidFromDate as start_date,
+                 cop.ValidToDate as end_date,
+                 cop.Aff_RoleLkp as role_lkp,
+                 cop.Description as role_desc,
+                 cop.Frwk_InactiveFlag as soft_deleted
+               FROM dbo.Core_Organisation_Persons cop
+               LEFT JOIN dbo.Core_Persons p ON cop.PersonId = p.Id
+               LEFT JOIN dbo.Core_Organisations o ON cop.OrganisationId = o.Id
+               WHERE cop.Frwk_Discriminator = 'Aff.FirmPractitioner'`,
+    getSqlKey: r => String(r.id || '').trim().toLowerCase(),
+    getBubbleKey: r => String(r.id || '').trim().toLowerCase(),
+    checkDiffs: (s, b) => {
+      const diffs = [];
+      if (normalizeString(s.memno) !== normalizeString(b.practitioner_number)) diffs.push('PractitionerNumber');
+      if (normalizeString(s.firmno) !== normalizeString(b.firm_number)) diffs.push('FirmNumber');
+      if (normalizeBoolean(s.inactive) !== normalizeBoolean(b.inactive)) diffs.push('Inactive');
+      return diffs;
+    }
+  },
+  audits: {
+    cacheFile: '.cache_lpff.firm.audits.view.json',
+    sqlQuery: `SELECT Id, FirmNo as firm_number, Year, Frwk_InactiveFlag as inactive 
+               FROM dbo.Aff_FirmFinancialYears`,
+    getSqlKey: r => String(r.Id || r.id || '').trim().toLowerCase(),
+    getBubbleKey: r => String(r['ID'] || r['id'] || '').trim().toLowerCase(),
+    checkDiffs: (s, b) => {
+      const diffs = [];
+      if (normalizeString(s.firm_number) !== normalizeString(b['Firm No.'])) diffs.push('FirmNo');
+      if (normalizeString(s.Year) !== normalizeString(b['Year'])) diffs.push('Year');
+      if (normalizeBoolean(s.inactive) !== normalizeBoolean(b.Inactive)) diffs.push('Inactive');
+      return diffs;
+    }
+  }
+};
+
+function normalizeString(val) {
+  if (val === null || val === undefined) return '';
+  return String(val).trim().toUpperCase();
+}
+
+function normalizeBoolean(val) {
+  if (val === null || val === undefined) return false;
+  if (typeof val === 'boolean') return val;
+  const s = String(val).trim().toLowerCase();
+  return s === 'true' || s === '1' || s === 'yes' || s === 'active';
+}
+
 function computeTableHealth(id, sqlCount, bubbleCount, missingInBubble, missingInSQL, fieldMismatches) {
   if (sqlCount === '—' || bubbleCount === '—' || typeof sqlCount !== 'number' || typeof bubbleCount !== 'number') {
     return 'Unknown';
@@ -4475,213 +4622,38 @@ function computeTableHealth(id, sqlCount, bubbleCount, missingInBubble, missingI
   return 'Healthy';
 }
 
-app.get('/dashboard/reconciliation-summary', async (req, res) => {
-  const reportPath = 'D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment\\reconciliation_summary_report.md';
-  const ehReportPath = 'D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment\\EmploymentHistory\\employment_history_reconciliation_findings_report.md';
-  
-  let lastReconciledTime = null;
-  const tableStats = {};
-  
-  // 1. Initialize empty placeholders
-  const entityIds = ['firms', 'banks', 'practitioners', 'practitionersadm', 'employmenthistory', 'audits', 'applications', 'certificates'];
-  const entityLabels = {
-    firms: 'Firms',
-    banks: 'Banks',
-    practitioners: 'Practitioners',
-    practitionersadm: 'Practitioners Admissions',
-    employmenthistory: 'Employment History',
-    audits: 'Audits',
-    applications: 'Applications',
-    certificates: 'Certificates'
+async function fetchLiveCounts(bubbleBase, bubbleToken) {
+  const counts = {
+    firms: { sql: 0, bubble: 0 },
+    banks: { sql: 0, bubble: 0 },
+    practitioners: { sql: 0, bubble: 0 },
+    practitionersadm: { sql: 0, bubble: 0 },
+    employmenthistory: { sql: 0, bubble: 0 },
+    audits: { sql: 0, bubble: 0 },
+    applications: { sql: 0, bubble: 0 },
+    certificates: { sql: 0, bubble: 0 }
   };
   
-  entityIds.forEach(id => {
-    tableStats[id] = {
-      id,
-      name: entityLabels[id],
-      sqlCount: '—',
-      bubbleCount: '—',
-      sqlDuplicates: 0,
-      bubbleDuplicates: 0,
-      missingInBubble: 0,
-      missingInSQL: 0,
-      fieldMismatches: 0,
-      health: 'Unknown',
-      lastSyncTime: null,
-      cause: null,
-      drilldown: null
-    };
-  });
-
-  // 2. Parse main summary report
+  let pool;
   try {
-    if (fs.existsSync(reportPath)) {
-      const stats = fs.statSync(reportPath);
-      lastReconciledTime = stats.mtime.toISOString();
-      
-      const content = fs.readFileSync(reportPath, 'utf8');
-      const lines = content.split('\n');
-      
-      lines.forEach(line => {
-        if (line.includes('|') && !line.includes('Entity') && !line.includes('---')) {
-          const parts = line.split('|').map(p => p.trim());
-          if (parts.length >= 10) {
-            const rawName = parts[1].replace(/\*\*/g, '');
-            const sqlCount = parseInt(parts[2].replace(/[\s\u00a0,]/g, ''));
-            const bubbleCount = parseInt(parts[3].replace(/[\s\u00a0,]/g, ''));
-            const sqlDuplicates = parseInt(parts[4].replace(/[\s\u00a0,]/g, ''));
-            const bubbleDuplicates = parseInt(parts[5].replace(/[\s\u00a0,]/g, ''));
-            const missingInBubble = parseInt(parts[6].replace(/[\s\u00a0,]/g, ''));
-            const missingInSQL = parseInt(parts[7].replace(/[\s\u00a0,]/g, ''));
-            const fieldMismatches = parseInt(parts[8].replace(/[\s\u00a0,]/g, ''));
-            
-            let id = '';
-            if (rawName.toLowerCase().includes('firm')) id = 'firms';
-            else if (rawName.toLowerCase().includes('bank')) id = 'banks';
-            else if (rawName.toLowerCase().includes('practitioners admissions') || rawName.toLowerCase().includes('practitioner admissions')) id = 'practitionersadm';
-            else if (rawName.toLowerCase().includes('practitioner')) id = 'practitioners';
-            else if (rawName.toLowerCase().includes('audit')) id = 'audits';
-            
-            if (id && tableStats[id]) {
-              tableStats[id].sqlCount = isNaN(sqlCount) ? '—' : sqlCount;
-              tableStats[id].bubbleCount = isNaN(bubbleCount) ? '—' : bubbleCount;
-              tableStats[id].sqlDuplicates = isNaN(sqlDuplicates) ? 0 : sqlDuplicates;
-              tableStats[id].bubbleDuplicates = isNaN(bubbleDuplicates) ? 0 : bubbleDuplicates;
-              tableStats[id].missingInBubble = isNaN(missingInBubble) ? 0 : missingInBubble;
-              tableStats[id].missingInSQL = isNaN(missingInSQL) ? 0 : missingInSQL;
-              tableStats[id].fieldMismatches = isNaN(fieldMismatches) ? 0 : fieldMismatches;
-              tableStats[id].health = computeTableHealth(id, sqlCount, bubbleCount, missingInBubble, missingInSQL, fieldMismatches);
-              
-              if (id === 'firms') {
-                tableStats[id].cause = "formatting discrepancies in firm names (suffixes like 'Inc' or 'Attorneys') between SQL and Bubble";
-                tableStats[id].drilldown = { "Name Formatting": 412, "Status Mismatch": 42 };
-              } else if (id === 'banks') {
-                tableStats[id].cause = "previously affected by a firm-link payload bug — fix deployed, migration in progress";
-                tableStats[id].drilldown = { "Missing reference": 7374, "Inactive Flag": 557 };
-              } else if (id === 'practitioners') {
-                tableStats[id].cause = "minor spelling variations and spacing discrepancies in practitioner middle names";
-                tableStats[id].drilldown = { "Whitespace mismatch": 896 };
-              } else if (id === 'practitionersadm') {
-                tableStats[id].cause = "discrepancies in admission types (Attorney, Conveyancer, Notary, Advocate flags)";
-                tableStats[id].drilldown = { "Admission Flags mismatch": 1830 };
-              } else if (id === 'audits') {
-                tableStats[id].cause = "mapping alignment gap for financial year timestamps and period links";
-                tableStats[id].drilldown = { "Missing in Bubble": 20346, "Missing in SQL": 16090, "Field mismatch": 4266 };
-              }
-            }
-          }
-        }
-      });
-    }
-  } catch (err) {
-    console.error('Error parsing main reconciliation report:', err.message);
-  }
-
-  // 3. Parse Employment History findings report
-  try {
-    if (fs.existsSync(ehReportPath)) {
-      const content = fs.readFileSync(ehReportPath, 'utf8');
-      const lines = content.split('\n');
-      
-      let sqlCount = '—';
-      let bubbleCount = '—';
-      let sqlDuplicates = 0;
-      let bubbleDuplicates = 0;
-      let missingInBubble = 0;
-      let missingInSQL = 0;
-      let fieldMismatches = 0;
-      
-      const extractMdValue = (line) => {
-        const parts = line.split('**');
-        if (parts.length >= 4) {
-          return parseInt(parts[3].replace(/[\s\u00a0,]/g, '')) || 0;
-        }
-        return 0;
-      };
-      
-      lines.forEach(line => {
-        if (line.includes('Total SQL Active Records')) sqlCount = extractMdValue(line);
-        else if (line.includes('Total Bubble Records')) bubbleCount = extractMdValue(line);
-        else if (line.includes('SQL Duplicates')) sqlDuplicates = extractMdValue(line);
-        else if (line.includes('Bubble Duplicates')) bubbleDuplicates = extractMdValue(line);
-        else if (line.includes('In SQL, Missing in Bubble')) missingInBubble = extractMdValue(line);
-        else if (line.includes('In Bubble, Missing in SQL')) missingInSQL = extractMdValue(line);
-        else if (line.includes('Present in Both, but Field Mismatches')) fieldMismatches = extractMdValue(line);
-      });
-      
-      tableStats['employmenthistory'] = {
-        id: 'employmenthistory',
-        name: 'Employment History',
-        sqlCount,
-        bubbleCount,
-        sqlDuplicates,
-        bubbleDuplicates,
-        missingInBubble,
-        missingInSQL,
-        fieldMismatches,
-        health: computeTableHealth('employmenthistory', sqlCount, bubbleCount, missingInBubble, missingInSQL, fieldMismatches),
-        cause: "minor null vs undefined type variations on Practitioner Number fields",
-        drilldown: { "Type mismatches": fieldMismatches }
-      };
-    }
-  } catch (err) {
-    console.error('Error parsing EH reconciliation report:', err.message);
-  }
-
-  // 4. Load live watermarks (to get last successful sync times)
-  const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
-  const isDevVersion = bubbleBase.includes('/version-test/');
-  const ids = getSyncConfigIds(!isDevVersion);
-  
-  const tables = ['firms', 'banks', 'practitioners', 'practitionersadm', 'employmentHistory', 'audits'];
-  const watermarkPromises = tables.map(async (table) => {
-    try {
-      const url = `${bubbleBase}obj/syncconfig/${ids[table]}`;
-      const configRes = await fetch(url, {
-        headers: { Authorization: `Bearer ${bubbleToken}` },
-        signal: AbortSignal.timeout(3000)
-      });
-      if (configRes.ok) {
-        const data = await configRes.json();
-        return { table, lastSyncTime: data.response?.LastSyncTime || null };
-      }
-    } catch (err) {
-      console.warn(`Failed to fetch live watermark for ${table} in reconciliation summary: ${err.message}`);
-    }
-    return { table, lastSyncTime: null };
-  });
-
-  const watermarksList = await Promise.all(watermarkPromises);
-  watermarksList.forEach(w => {
-    let id = w.table.toLowerCase();
-    if (id === 'employmenthistory') id = 'employmenthistory';
-    if (tableStats[id]) {
-      tableStats[id].lastSyncTime = w.lastSyncTime;
-    }
-  });
-
-  // Load live counts and watermarks for Applications and Certificates
-  let appSqlCount = 0;
-  let certSqlCount = 0;
-  let appBubbleCount = 0;
-  let certBubbleCount = 0;
-
-  try {
-    const importsSqlConfig = {
-      user: process.env.IMPORTS_SQL_USER || process.env.SQL_USER,
-      password: process.env.IMPORTS_SQL_PASSWORD || process.env.SQL_PASSWORD,
-      server: process.env.IMPORTS_SQL_SERVER || process.env.SQL_SERVER,
-      port: parseInt(process.env.IMPORTS_SQL_PORT || process.env.SQL_PORT || '1433'),
-      database: 'PRODUCTION',
-      options: {
-        encrypt: true,
-        trustServerCertificate: true,
-        connectTimeout: 5000,
-        requestTimeout: 10000
-      }
-    };
+    pool = await sql.connect(importsConfig);
+    const [firmsRes, banksRes, pracsRes, ehRes, auditsRes] = await Promise.all([
+      pool.query("SELECT COUNT(*) AS count FROM dbo.Core_Organisations WHERE Frwk_Discriminator = 'Aff.Firm'"),
+      pool.query("SELECT COUNT(*) AS count FROM dbo.Core_BankAccounts"),
+      pool.query("SELECT COUNT(*) AS count FROM dbo.Core_Persons WHERE Frwk_Discriminator = 'Aff.Practitioner'"),
+      pool.query("SELECT COUNT(*) AS count FROM dbo.Core_Organisation_Persons WHERE Frwk_Discriminator = 'Aff.FirmPractitioner'"),
+      pool.query("SELECT COUNT(*) AS count FROM dbo.Aff_FirmFinancialYears")
+    ]);
     
-    const importsPool = await sql.connect(importsSqlConfig);
+    counts.firms.sql = firmsRes.recordset[0].count;
+    counts.banks.sql = banksRes.recordset[0].count;
+    counts.practitioners.sql = pracsRes.recordset[0].count;
+    counts.practitionersadm.sql = pracsRes.recordset[0].count;
+    counts.employmenthistory.sql = ehRes.recordset[0].count;
+    counts.audits.sql = auditsRes.recordset[0].count;
+    await pool.close();
+    
+    const importsPool = await sql.connect(importsConfig);
     const [appRes, certRes] = await Promise.all([
       importsPool.query(`
         SELECT COUNT(*) AS count
@@ -4698,60 +4670,423 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
         WHERE l.Frwk_InactiveFlag = 0 AND a.Frwk_InactiveFlag = 0
       `)
     ]);
-    appSqlCount = appRes.recordset[0].count;
-    certSqlCount = certRes.recordset[0].count;
+    counts.applications.sql = appRes.recordset[0].count;
+    counts.certificates.sql = certRes.recordset[0].count;
     await importsPool.close();
   } catch (err) {
-    console.error('Error fetching live SQL counts for Applications/Certificates:', err.message);
+    console.error('Error fetching live SQL counts for summary:', err.message);
+    if (pool) { try { await pool.close(); } catch (_) {} }
   }
-
+  
   try {
-    const [appRes, certRes] = await Promise.all([
-      fetch(`${bubbleBase}obj/lpff.application.view?limit=1`, {
-        headers: { Authorization: `Bearer ${bubbleToken}` },
-        signal: AbortSignal.timeout(3000)
-      }).then(r => r.json()),
-      fetch(`${bubbleBase}obj/lpff.certificates.view?limit=1`, {
-        headers: { Authorization: `Bearer ${bubbleToken}` },
-        signal: AbortSignal.timeout(3000)
-      }).then(r => r.json())
-    ]);
-
-    if (appRes.response) {
-      appBubbleCount = (appRes.response.count || 0) + (appRes.response.remaining || 0);
-    }
-    if (certRes.response) {
-      certBubbleCount = (certRes.response.count || 0) + (certRes.response.remaining || 0);
-    }
+    const urls = {
+      firms: 'obj/lpff.firms.view?limit=1',
+      banks: 'obj/lpff.bankaccounts.view?limit=1',
+      practitioners: 'obj/lpff.practitioner.view?limit=1',
+      practitionersadm: 'obj/lpff.practitioner.view?limit=1',
+      employmenthistory: 'obj/lpff.employment.history.view?limit=1',
+      audits: 'obj/lpff.firm.audits.view?limit=1',
+      applications: 'obj/lpff.application.view?limit=1',
+      certificates: 'obj/lpff.certificates.view?limit=1'
+    };
+    
+    const bubblePromises = Object.entries(urls).map(async ([key, path]) => {
+      try {
+        const res = await fetch(`${bubbleBase}${path}`, {
+          headers: { Authorization: `Bearer ${bubbleToken}` },
+          signal: AbortSignal.timeout(4000)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.response) {
+            counts[key].bubble = (data.response.count || 0) + (data.response.remaining || 0);
+          }
+        }
+      } catch (err) {
+        console.warn(`Failed to fetch Bubble count for ${key}:`, err.message);
+      }
+    });
+    
+    await Promise.all(bubblePromises);
   } catch (err) {
-    console.error('Error fetching live Bubble counts for Applications/Certificates:', err.message);
+    console.error('Error fetching live Bubble counts for summary:', err.message);
   }
+  
+  return counts;
+}
+
+const reconciliationLocks = {};
+
+async function runSingleTableReconciliation(id) {
+  if (!RECON_CONFIG[id]) return;
+  if (reconciliationLocks[id]) {
+    console.log(`[Reconciliation] Single-table run for ${id} is already in progress.`);
+    return;
+  }
+  
+  reconciliationLocks[id] = true;
+  console.log(`[Reconciliation] Starting background single-table check for: ${id}`);
+  
+  let pool;
+  try {
+    const tableConfig = RECON_CONFIG[id];
+    const cachePath = path.join('D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment', tableConfig.cacheFile);
+    
+    if (!fs.existsSync(cachePath)) {
+      console.warn(`[Reconciliation] Cache file not found for ${id}: ${cachePath}`);
+      reconciliationLocks[id] = false;
+      return;
+    }
+    
+    const bubbleRecords = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+    
+    pool = await sql.connect(importsConfig);
+    const sqlRes = await pool.request().query(tableConfig.sqlQuery);
+    const sqlRecords = sqlRes.recordset;
+    await pool.close();
+    
+    const sqlGroups = {};
+    sqlRecords.forEach(r => {
+      const key = tableConfig.getSqlKey(r);
+      if (!key) return;
+      if (!sqlGroups[key]) sqlGroups[key] = [];
+      sqlGroups[key].push(r);
+    });
+
+    const bubbleGroups = {};
+    bubbleRecords.forEach(r => {
+      const key = tableConfig.getBubbleKey(r);
+      if (!key) return;
+      if (!bubbleGroups[key]) bubbleGroups[key] = [];
+      bubbleGroups[key].push(r);
+    });
+
+    let sqlDuplicates = 0;
+    Object.values(sqlGroups).forEach(list => {
+      if (list.length > 1) sqlDuplicates += (list.length - 1);
+    });
+
+    let bubbleDuplicates = 0;
+    Object.values(bubbleGroups).forEach(list => {
+      if (list.length > 1) bubbleDuplicates += (list.length - 1);
+    });
+
+    let missingInBubble = 0;
+    Object.keys(sqlGroups).forEach(key => {
+      if (!bubbleGroups[key]) missingInBubble++;
+    });
+
+    let missingInSQL = 0;
+    Object.keys(bubbleGroups).forEach(key => {
+      if (!sqlGroups[key]) missingInSQL++;
+    });
+
+    let fieldMismatches = 0;
+    Object.entries(sqlGroups).forEach(([key, sqlList]) => {
+      const bList = bubbleGroups[key];
+      if (bList && sqlList.length === 1 && bList.length === 1) {
+        const diffs = tableConfig.checkDiffs(sqlList[0], bList[0]);
+        if (diffs.length > 0) fieldMismatches++;
+      }
+    });
+
+    const stats = {
+      sqlCount: sqlRecords.length,
+      bubbleCount: bubbleRecords.length,
+      sqlDuplicates,
+      bubbleDuplicates,
+      missingInBubble,
+      missingInSQL,
+      fieldMismatches,
+      lastReconciledTime: new Date().toISOString()
+    };
+    
+    const statsPath = path.join(__dirname, `stats_${id}.json`);
+    fs.writeFileSync(statsPath, JSON.stringify(stats, null, 2), 'utf8');
+    console.log(`[Reconciliation] Successfully saved stats for ${id} to ${statsPath}`);
+  } catch (err) {
+    console.error(`[Reconciliation] Error running background single-table check for ${id}:`, err.message);
+    if (pool) { try { await pool.close(); } catch (_) {} }
+  } finally {
+    reconciliationLocks[id] = false;
+  }
+}
+
+app.get('/dashboard/reconciliation-summary', async (req, res) => {
+  const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
+  const isDevVersion = bubbleBase.includes('/version-test/');
+  const syncConfigIdsList = getSyncConfigIds(!isDevVersion);
+  
+  const entityIds = ['firms', 'banks', 'practitioners', 'practitionersadm', 'employmenthistory', 'audits', 'applications', 'certificates'];
+  const entityLabels = {
+    firms: 'Firms',
+    banks: 'Banks',
+    practitioners: 'Practitioners',
+    practitionersadm: 'Practitioners Admissions',
+    employmenthistory: 'Employment History',
+    audits: 'Audits',
+    applications: 'Applications',
+    certificates: 'Certificates'
+  };
+  
+  const tableStats = {};
+  entityIds.forEach(id => {
+    tableStats[id] = {
+      id,
+      name: entityLabels[id],
+      sqlCount: '—',
+      bubbleCount: '—',
+      sqlDuplicates: 0,
+      bubbleDuplicates: 0,
+      missingInBubble: 0,
+      missingInSQL: 0,
+      fieldMismatches: 0,
+      health: 'Unknown',
+      lastSyncTime: null,
+      cause: null,
+      drilldown: null,
+      lastReconciledTime: null
+    };
+  });
+
+  const causeTexts = {
+    firms: "formatting discrepancies in firm names (suffixes like 'Inc' or 'Attorneys') between SQL and Bubble",
+    banks: "previously affected by a firm-link payload bug — fix deployed, migration in progress",
+    practitioners: "minor spelling variations and spacing discrepancies in practitioner middle names",
+    practitionersadm: "discrepancies in admission types (Attorney, Conveyancer, Notary, Advocate flags)",
+    audits: "mapping alignment gap for financial year timestamps and period links",
+    employmenthistory: "minor null vs undefined type variations on Practitioner Number fields",
+    applications: "live count alignment check (filtered to active applications and active applicants); delta reflects pending sync batches",
+    certificates: "live count alignment check (filtered to active licenses and active applicants); delta reflects pending sync batches"
+  };
+
+  const drilldownStats = {
+    firms: { "Name Formatting": 412, "Status Mismatch": 42 },
+    banks: { "Missing reference": 7374, "Inactive Flag": 557 },
+    practitioners: { "Whitespace mismatch": 896 },
+    practitionersadm: { "Admission Flags mismatch": 1830 },
+    audits: { "Missing in Bubble": 20346, "Missing in SQL": 16090, "Field mismatch": 4266 },
+    employmenthistory: { "Type mismatches": 1083 }
+  };
+
+  entityIds.forEach(id => {
+    tableStats[id].cause = causeTexts[id];
+    tableStats[id].drilldown = drilldownStats[id] || null;
+  });
+
+  const idsToLoad = ['firms', 'banks', 'practitioners', 'practitionersadm', 'employmenthistory', 'audits'];
+  let parsedFromMds = false;
+  
+  idsToLoad.forEach(id => {
+    const statsPath = path.join(__dirname, `stats_${id}.json`);
+    if (fs.existsSync(statsPath)) {
+      try {
+        const stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
+        tableStats[id].sqlCount = stats.sqlCount;
+        tableStats[id].bubbleCount = stats.bubbleCount;
+        tableStats[id].sqlDuplicates = stats.sqlDuplicates;
+        tableStats[id].bubbleDuplicates = stats.bubbleDuplicates;
+        tableStats[id].missingInBubble = stats.missingInBubble;
+        tableStats[id].missingInSQL = stats.missingInSQL;
+        tableStats[id].fieldMismatches = stats.fieldMismatches;
+        tableStats[id].lastReconciledTime = stats.lastReconciledTime;
+      } catch (e) {
+        console.error(`Error loading stats JSON for ${id}:`, e.message);
+      }
+    } else {
+      parsedFromMds = true;
+    }
+  });
+
+  if (parsedFromMds) {
+    console.log('[Reconciliation] Some JSON stats files missing, parsing MD reports as fallback migration...');
+    const reportPath = 'D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment\\reconciliation_summary_report.md';
+    const ehReportPath = 'D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment\\EmploymentHistory\\employment_history_reconciliation_findings_report.md';
+    
+    try {
+      if (fs.existsSync(reportPath)) {
+        const content = fs.readFileSync(reportPath, 'utf8');
+        const lines = content.split('\n');
+        lines.forEach(line => {
+          if (line.includes('|') && !line.includes('Entity') && !line.includes('---')) {
+            const parts = line.split('|').map(p => p.trim());
+            if (parts.length >= 10) {
+              const rawName = parts[1].replace(/\*\*/g, '');
+              const sqlVal = parseInt(parts[2].replace(/[\s\u00a0,]/g, ''));
+              const bubbleVal = parseInt(parts[3].replace(/[\s\u00a0,]/g, ''));
+              const sqlDup = parseInt(parts[4].replace(/[\s\u00a0,]/g, ''));
+              const bubbleDup = parseInt(parts[5].replace(/[\s\u00a0,]/g, ''));
+              const missingBubble = parseInt(parts[6].replace(/[\s\u00a0,]/g, ''));
+              const missingSQL = parseInt(parts[7].replace(/[\s\u00a0,]/g, ''));
+              const fieldMismatch = parseInt(parts[8].replace(/[\s\u00a0,]/g, ''));
+              
+              let id = '';
+              if (rawName.toLowerCase().includes('firm')) id = 'firms';
+              else if (rawName.toLowerCase().includes('bank')) id = 'banks';
+              else if (rawName.toLowerCase().includes('practitioners admissions') || rawName.toLowerCase().includes('practitioner admissions')) id = 'practitionersadm';
+              else if (rawName.toLowerCase().includes('practitioner')) id = 'practitioners';
+              else if (rawName.toLowerCase().includes('audit')) id = 'audits';
+              
+              if (id && tableStats[id] && tableStats[id].sqlCount === '—') {
+                const stats = {
+                  sqlCount: isNaN(sqlVal) ? 0 : sqlVal,
+                  bubbleCount: isNaN(bubbleVal) ? 0 : bubbleVal,
+                  sqlDuplicates: isNaN(sqlDup) ? 0 : sqlDup,
+                  bubbleDuplicates: isNaN(bubbleDup) ? 0 : bubbleDup,
+                  missingInBubble: isNaN(missingBubble) ? 0 : missingBubble,
+                  missingInSQL: isNaN(missingSQL) ? 0 : missingSQL,
+                  fieldMismatches: isNaN(fieldMismatch) ? 0 : fieldMismatch,
+                  lastReconciledTime: fs.statSync(reportPath).mtime.toISOString()
+                };
+                tableStats[id].sqlCount = stats.sqlCount;
+                tableStats[id].bubbleCount = stats.bubbleCount;
+                tableStats[id].sqlDuplicates = stats.sqlDuplicates;
+                tableStats[id].bubbleDuplicates = stats.bubbleDuplicates;
+                tableStats[id].missingInBubble = stats.missingInBubble;
+                tableStats[id].missingInSQL = stats.missingInSQL;
+                tableStats[id].fieldMismatches = stats.fieldMismatches;
+                tableStats[id].lastReconciledTime = stats.lastReconciledTime;
+                
+                fs.writeFileSync(path.join(__dirname, `stats_${id}.json`), JSON.stringify(stats, null, 2), 'utf8');
+              }
+            }
+          }
+        });
+      }
+    } catch (err) {
+      console.error('Error migrating main report:', err.message);
+    }
+
+    try {
+      if (fs.existsSync(ehReportPath) && tableStats['employmenthistory'].sqlCount === '—') {
+        const content = fs.readFileSync(ehReportPath, 'utf8');
+        const lines = content.split('\n');
+        
+        let sqlVal = 0, bubbleVal = 0, sqlDup = 0, bubbleDup = 0;
+        let missingBubble = 0, missingSQL = 0, fieldMismatch = 0;
+        
+        const extractMdValue = (line) => {
+          const parts = line.split('**');
+          if (parts.length >= 4) {
+            return parseInt(parts[3].replace(/[\s\u00a0,]/g, '')) || 0;
+          }
+          return 0;
+        };
+
+        lines.forEach(line => {
+          if (line.includes('Total SQL Active Records')) sqlVal = extractMdValue(line);
+          else if (line.includes('Total Bubble Records')) bubbleVal = extractMdValue(line);
+          else if (line.includes('SQL Duplicates')) sqlDup = extractMdValue(line);
+          else if (line.includes('Bubble Duplicates')) bubbleDup = extractMdValue(line);
+          else if (line.includes('In SQL, Missing in Bubble')) missingBubble = extractMdValue(line);
+          else if (line.includes('In Bubble, Missing in SQL')) missingSQL = extractMdValue(line);
+          else if (line.includes('Present in Both, but Field Mismatches')) fieldMismatch = extractMdValue(line);
+        });
+
+        const stats = {
+          sqlCount: sqlVal,
+          bubbleCount: bubbleVal,
+          sqlDuplicates: sqlDup,
+          bubbleDuplicates: bubbleDup,
+          missingInBubble: missingBubble,
+          missingInSQL: missingSQL,
+          fieldMismatches: fieldMismatch,
+          lastReconciledTime: fs.statSync(ehReportPath).mtime.toISOString()
+        };
+
+        tableStats['employmenthistory'].sqlCount = stats.sqlCount;
+        tableStats['employmenthistory'].bubbleCount = stats.bubbleCount;
+        tableStats['employmenthistory'].sqlDuplicates = stats.sqlDuplicates;
+        tableStats['employmenthistory'].bubbleDuplicates = stats.bubbleDuplicates;
+        tableStats['employmenthistory'].missingInBubble = stats.missingInBubble;
+        tableStats['employmenthistory'].missingInSQL = stats.missingInSQL;
+        tableStats['employmenthistory'].fieldMismatches = stats.fieldMismatches;
+        tableStats['employmenthistory'].lastReconciledTime = stats.lastReconciledTime;
+
+        fs.writeFileSync(path.join(__dirname, 'stats_employmenthistory.json'), JSON.stringify(stats, null, 2), 'utf8');
+      }
+    } catch (err) {
+      console.error('Error migrating EH report:', err.message);
+    }
+  }
+
+  // Load watermarks
+  const syncTables = ['firms', 'banks', 'practitioners', 'practitionersadm', 'employmenthistory', 'audits'];
+  const watermarkPromises = syncTables.map(async (table) => {
+    try {
+      let configKey = table;
+      if (table === 'employmenthistory') configKey = 'employmentHistory';
+      const url = `${bubbleBase}obj/syncconfig/${syncConfigIdsList[configKey]}`;
+      const configRes = await fetch(url, {
+        headers: { Authorization: `Bearer ${bubbleToken}` },
+        signal: AbortSignal.timeout(3000)
+      });
+      if (configRes.ok) {
+        const data = await configRes.json();
+        return { table, lastSyncTime: data.response?.LastSyncTime || null };
+      }
+    } catch (err) {
+      console.warn(`Failed to fetch live watermark for ${table}: ${err.message}`);
+    }
+    return { table, lastSyncTime: null };
+  });
+
+  const watermarksList = await Promise.all(watermarkPromises);
+  watermarksList.forEach(w => {
+    if (tableStats[w.table]) {
+      tableStats[w.table].lastSyncTime = w.lastSyncTime;
+    }
+  });
 
   try {
     const importWatermarks = loadImportsWatermark();
-    
-    if (tableStats['applications']) {
-      tableStats['applications'].sqlCount = appSqlCount;
-      tableStats['applications'].bubbleCount = appBubbleCount;
-      tableStats['applications'].lastSyncTime = importWatermarks.applications || null;
-      tableStats['applications'].health = computeTableHealth('applications', appSqlCount, appBubbleCount, Math.max(0, appSqlCount - appBubbleCount), 0, 0);
-      tableStats['applications'].cause = "live count alignment check (filtered to active applications and active applicants); delta reflects pending sync batches";
-    }
-    
-    if (tableStats['certificates']) {
-      tableStats['certificates'].sqlCount = certSqlCount;
-      tableStats['certificates'].bubbleCount = certBubbleCount;
-      tableStats['certificates'].lastSyncTime = importWatermarks.certificates || null;
-      tableStats['certificates'].health = computeTableHealth('certificates', certSqlCount, certBubbleCount, Math.max(0, certSqlCount - certBubbleCount), 0, 0);
-      tableStats['certificates'].cause = "live count alignment check (filtered to active licenses and active applicants); delta reflects pending sync batches";
-    }
+    if (tableStats['applications']) tableStats['applications'].lastSyncTime = importWatermarks.applications || null;
+    if (tableStats['certificates']) tableStats['certificates'].lastSyncTime = importWatermarks.certificates || null;
   } catch (err) {
-    console.warn(`Failed to load imports watermark/counts: ${err.message}`);
+    console.warn(`Failed to load imports watermarks: ${err.message}`);
   }
 
-  // 5. Calculate Rollups
+  // Get dynamic live counts (using TTL cache)
+  let counts;
+  if (LIVE_COUNTS_CACHE.data && Date.now() < LIVE_COUNTS_CACHE.expiresAt) {
+    counts = LIVE_COUNTS_CACHE.data;
+  } else {
+    counts = await fetchLiveCounts(bubbleBase, bubbleToken);
+    LIVE_COUNTS_CACHE.data = counts;
+    LIVE_COUNTS_CACHE.expiresAt = Date.now() + CACHE_TTL_MS;
+  }
+
+  // Merge live counts
+  Object.keys(counts).forEach(id => {
+    if (tableStats[id]) {
+      tableStats[id].sqlCount = counts[id].sql;
+      tableStats[id].bubbleCount = counts[id].bubble;
+      
+      const missingBubble = (id === 'applications' || id === 'certificates') 
+        ? Math.max(0, counts[id].sql - counts[id].bubble) 
+        : (tableStats[id].missingInBubble || 0);
+
+      tableStats[id].health = computeTableHealth(
+        id, 
+        counts[id].sql, 
+        counts[id].bubble, 
+        missingBubble, 
+        tableStats[id].missingInSQL || 0, 
+        tableStats[id].fieldMismatches || 0
+      );
+    }
+  });
+
+  let maxReconciledTime = null;
+  entityIds.forEach(id => {
+    if (tableStats[id].lastReconciledTime) {
+      if (!maxReconciledTime || new Date(tableStats[id].lastReconciledTime) > new Date(maxReconciledTime)) {
+        maxReconciledTime = tableStats[id].lastReconciledTime;
+      }
+    }
+  });
+
   const tablesArray = Object.values(tableStats);
-  
   let overallHealth = 'Healthy';
   let warningCount = 0;
   let criticalCount = 0;
@@ -4782,7 +5117,7 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
     success: true,
     isReconciliationRunning,
     reconciliationProgress,
-    lastReconciledTime,
+    lastReconciledTime: maxReconciledTime,
     overallHealth,
     aggregate: {
       totalSource,
@@ -5604,6 +5939,7 @@ async function doSyncApplications(topLimit = 5, trigger = 'manual', bubbleBase =
     });
 
     unregisterImportsSync(table);
+    LIVE_COUNTS_CACHE.expiresAt = 0;
     return { success: errors === 0, synced: success, total: records.length, errors };
 
   } catch (err) {
@@ -5898,6 +6234,7 @@ async function doSyncCertificates(topLimit = 5, trigger = 'manual', bubbleBase =
     });
 
     unregisterImportsSync(table);
+    LIVE_COUNTS_CACHE.expiresAt = 0;
     return { success: errors === 0, synced: success, total: records.length, errors };
 
   } catch (err) {
