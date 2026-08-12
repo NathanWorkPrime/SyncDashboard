@@ -4622,6 +4622,30 @@ function computeTableHealth(id, sqlCount, bubbleCount, missingInBubble, missingI
   return 'Healthy';
 }
 
+let dashboardPool = null;
+async function getDashboardPool() {
+  if (dashboardPool) {
+    if (dashboardPool.connected) return dashboardPool;
+    try { await dashboardPool.close(); } catch (_) {}
+  }
+  console.log('⚡ Initializing private SQL connection pool for dashboard...');
+  dashboardPool = new sql.ConnectionPool(importsConfig);
+  await dashboardPool.connect();
+  console.log('✅ Dashboard SQL connection pool initialized successfully.');
+  return dashboardPool;
+}
+
+async function runQueryOnPrivatePool(queryStr) {
+  const pool = new sql.ConnectionPool(importsConfig);
+  try {
+    await pool.connect();
+    const res = await pool.request().query(queryStr);
+    return res.recordset;
+  } finally {
+    try { await pool.close(); } catch (_) {}
+  }
+}
+
 async function fetchLiveCounts(bubbleBase, bubbleToken) {
   const counts = {
     firms: { sql: 0, bubble: 0 },
@@ -4634,15 +4658,29 @@ async function fetchLiveCounts(bubbleBase, bubbleToken) {
     certificates: { sql: 0, bubble: 0 }
   };
   
-  let pool;
+  let success = false;
   try {
-    pool = await sql.connect(importsConfig);
-    const [firmsRes, banksRes, pracsRes, ehRes, auditsRes] = await Promise.all([
+    const pool = await getDashboardPool();
+    const [firmsRes, banksRes, pracsRes, ehRes, auditsRes, appRes, certRes] = await Promise.all([
       pool.query("SELECT COUNT(*) AS count FROM dbo.Core_Organisations WHERE Frwk_Discriminator = 'Aff.Firm'"),
       pool.query("SELECT COUNT(*) AS count FROM dbo.Core_BankAccounts"),
       pool.query("SELECT COUNT(*) AS count FROM dbo.Core_Persons WHERE Frwk_Discriminator = 'Aff.Practitioner'"),
       pool.query("SELECT COUNT(*) AS count FROM dbo.Core_Organisation_Persons WHERE Frwk_Discriminator = 'Aff.FirmPractitioner'"),
-      pool.query("SELECT COUNT(*) AS count FROM dbo.Aff_FirmFinancialYears")
+      pool.query("SELECT COUNT(*) AS count FROM dbo.Aff_FirmFinancialYears"),
+      pool.query(`
+        SELECT COUNT(*) AS count
+        FROM dbo.Lic_LicenseApplications a
+        INNER JOIN dbo.Core_Periods p ON a.PeriodId = p.Id
+        INNER JOIN dbo.Core_Persons pe ON pe.Id = a.ApplicantId AND pe.Frwk_InactiveFlag = 0
+        WHERE a.Frwk_InactiveFlag = 0
+      `),
+      pool.query(`
+        SELECT COUNT(*) AS count
+        FROM dbo.Lic_Licenses l
+        INNER JOIN dbo.Lic_LicenseApplications a ON a.LicenseId = l.Id
+        INNER JOIN dbo.Core_Persons pe ON pe.Id = l.LicenseHolderPersonId AND pe.Frwk_InactiveFlag = 0
+        WHERE l.Frwk_InactiveFlag = 0 AND a.Frwk_InactiveFlag = 0
+      `)
     ]);
     
     counts.firms.sql = firmsRes.recordset[0].count;
@@ -4651,31 +4689,11 @@ async function fetchLiveCounts(bubbleBase, bubbleToken) {
     counts.practitionersadm.sql = pracsRes.recordset[0].count;
     counts.employmenthistory.sql = ehRes.recordset[0].count;
     counts.audits.sql = auditsRes.recordset[0].count;
-    await pool.close();
-    
-    const importsPool = await sql.connect(importsConfig);
-    const [appRes, certRes] = await Promise.all([
-      importsPool.query(`
-        SELECT COUNT(*) AS count
-        FROM dbo.Lic_LicenseApplications a
-        INNER JOIN dbo.Core_Periods p ON a.PeriodId = p.Id
-        INNER JOIN dbo.Core_Persons pe ON pe.Id = a.ApplicantId AND pe.Frwk_InactiveFlag = 0
-        WHERE a.Frwk_InactiveFlag = 0
-      `),
-      importsPool.query(`
-        SELECT COUNT(*) AS count
-        FROM dbo.Lic_Licenses l
-        INNER JOIN dbo.Lic_LicenseApplications a ON a.LicenseId = l.Id
-        INNER JOIN dbo.Core_Persons pe ON pe.Id = l.LicenseHolderPersonId AND pe.Frwk_InactiveFlag = 0
-        WHERE l.Frwk_InactiveFlag = 0 AND a.Frwk_InactiveFlag = 0
-      `)
-    ]);
     counts.applications.sql = appRes.recordset[0].count;
     counts.certificates.sql = certRes.recordset[0].count;
-    await importsPool.close();
+    success = true;
   } catch (err) {
-    console.error('Error fetching live SQL counts for summary:', err.message);
-    if (pool) { try { await pool.close(); } catch (_) {} }
+    console.error('Error fetching live SQL counts for summary:', err.stack);
   }
   
   try {
@@ -4712,7 +4730,7 @@ async function fetchLiveCounts(bubbleBase, bubbleToken) {
     console.error('Error fetching live Bubble counts for summary:', err.message);
   }
   
-  return counts;
+  return success ? counts : null;
 }
 
 const reconciliationLocks = {};
@@ -4727,7 +4745,6 @@ async function runSingleTableReconciliation(id) {
   reconciliationLocks[id] = true;
   console.log(`[Reconciliation] Starting background single-table check for: ${id}`);
   
-  let pool;
   try {
     const tableConfig = RECON_CONFIG[id];
     const cachePath = path.join('D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment', tableConfig.cacheFile);
@@ -4740,10 +4757,7 @@ async function runSingleTableReconciliation(id) {
     
     const bubbleRecords = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
     
-    pool = await sql.connect(importsConfig);
-    const sqlRes = await pool.request().query(tableConfig.sqlQuery);
-    const sqlRecords = sqlRes.recordset;
-    await pool.close();
+    const sqlRecords = await runQueryOnPrivatePool(tableConfig.sqlQuery);
     
     const sqlGroups = {};
     sqlRecords.forEach(r => {
@@ -4805,8 +4819,7 @@ async function runSingleTableReconciliation(id) {
     fs.writeFileSync(statsPath, JSON.stringify(stats, null, 2), 'utf8');
     console.log(`[Reconciliation] Successfully saved stats for ${id} to ${statsPath}`);
   } catch (err) {
-    console.error(`[Reconciliation] Error running background single-table check for ${id}:`, err.message);
-    if (pool) { try { await pool.close(); } catch (_) {} }
+    console.error(`[Reconciliation] Error running background single-table check for ${id}:`, err.stack);
   } finally {
     reconciliationLocks[id] = false;
   }
@@ -5047,13 +5060,27 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
   }
 
   // Get dynamic live counts (using TTL cache)
-  let counts;
+  let counts = null;
   if (LIVE_COUNTS_CACHE.data && Date.now() < LIVE_COUNTS_CACHE.expiresAt) {
     counts = LIVE_COUNTS_CACHE.data;
   } else {
-    counts = await fetchLiveCounts(bubbleBase, bubbleToken);
-    LIVE_COUNTS_CACHE.data = counts;
-    LIVE_COUNTS_CACHE.expiresAt = Date.now() + CACHE_TTL_MS;
+    const fetched = await fetchLiveCounts(bubbleBase, bubbleToken);
+    if (fetched) {
+      counts = fetched;
+      LIVE_COUNTS_CACHE.data = fetched;
+      LIVE_COUNTS_CACHE.expiresAt = Date.now() + CACHE_TTL_MS;
+    } else {
+      counts = LIVE_COUNTS_CACHE.data || {
+        firms: { sql: 0, bubble: 0 },
+        banks: { sql: 0, bubble: 0 },
+        practitioners: { sql: 0, bubble: 0 },
+        practitionersadm: { sql: 0, bubble: 0 },
+        employmenthistory: { sql: 0, bubble: 0 },
+        audits: { sql: 0, bubble: 0 },
+        applications: { sql: 0, bubble: 0 },
+        certificates: { sql: 0, bubble: 0 }
+      };
+    }
   }
 
   // Merge live counts

@@ -1879,7 +1879,7 @@
           <div class="stat-label" style="margin:0;">Last Reconciled</div>
         </div>
         <div class="stat-value" id="live-val-last-reconciled" style="font-size: 14px; font-weight: 800; line-height: 2.2;">—</div>
-        <div class="stat-sub" style="font-style: italic;">Based on cached reports</div>
+        <div class="stat-sub" id="live-sub-last-reconciled" style="font-style: italic;">Based on cached reports</div>
       </div>
     </div>
     
@@ -6159,14 +6159,17 @@ async function loadLiveDashboard() {
     }
     
     const lastReconciledVal = document.getElementById('live-val-last-reconciled');
+    const lastReconciledSub = document.getElementById('live-sub-last-reconciled');
     const bannerReconciledTime = document.getElementById('banner-reconciled-time');
     if (lastReconciledVal) {
       if (data.lastReconciledTime) {
         lastReconciledVal.innerHTML = new Date(data.lastReconciledTime).toLocaleString();
         lastReconciledVal.style.fontSize = '12px';
+        if (lastReconciledSub) lastReconciledSub.innerHTML = 'Reflects last sync/recon run';
       } else {
         lastReconciledVal.innerHTML = 'Never Reconciled';
         lastReconciledVal.style.fontSize = '12px';
+        if (lastReconciledSub) lastReconciledSub.innerHTML = 'No sync/recon history found';
       }
     }
     if (bannerReconciledTime) {
