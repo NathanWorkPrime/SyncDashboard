@@ -1839,9 +1839,9 @@
   </div>
 
   <div class="page-body">
-    <!-- Transparency Note -->
-    <div class="transparency-note" style="margin-bottom: 20px; background: var(--blue-light); border-left: 4px solid var(--blue); padding: 14px 18px; border-radius: var(--radius-md); font-size: 13px; color: var(--text-2); line-height: 1.5; box-shadow: var(--shadow-sm);">
-      <strong>ℹ️ Data Transparency Note:</strong> The comparison metrics and sync history shown on this page are computed using the local workspace build configurations. These statistics represent a point-in-time analysis from the workspace repository and have not been validated against the live VM's running environment.
+    <!-- Data Status Note -->
+    <div class="transparency-note" id="live-transparency-banner" style="margin-bottom: 20px; background: var(--blue-light); border-left: 4px solid var(--blue); padding: 14px 18px; border-radius: var(--radius-md); font-size: 13px; color: var(--text-2); line-height: 1.5; box-shadow: var(--shadow-sm);">
+      <strong>ℹ️ Data Status:</strong> Last Reconciled: <span id="banner-reconciled-time">—</span>. Comparison data reflects the most recent reconciliation run — click Reconcile Now to run a fresh check.
     </div>
 
     <!-- KPIs -->
@@ -2320,9 +2320,14 @@ function clearNotifications() {
 // ── TOAST ──
 function toast(msg) {
   var el = document.getElementById('toast');
+  if (!el) return;
   el.innerHTML = msg; el.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(function(){ el.classList.remove('show'); }, 3500);
+}
+function showToast(msg, type) {
+  var icon = type === 'success' ? '✅ ' : type === 'error' ? '❌ ' : 'ℹ️ ';
+  toast(icon + msg);
 }
 
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
@@ -6154,6 +6159,7 @@ async function loadLiveDashboard() {
     }
     
     const lastReconciledVal = document.getElementById('live-val-last-reconciled');
+    const bannerReconciledTime = document.getElementById('banner-reconciled-time');
     if (lastReconciledVal) {
       if (data.lastReconciledTime) {
         lastReconciledVal.innerHTML = new Date(data.lastReconciledTime).toLocaleString();
@@ -6162,6 +6168,9 @@ async function loadLiveDashboard() {
         lastReconciledVal.innerHTML = 'Never Reconciled';
         lastReconciledVal.style.fontSize = '12px';
       }
+    }
+    if (bannerReconciledTime) {
+      bannerReconciledTime.innerHTML = data.lastReconciledTime ? new Date(data.lastReconciledTime).toLocaleString() : 'Never Reconciled';
     }
     
     // Update tier badge counts
