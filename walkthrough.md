@@ -61,3 +61,19 @@ The browser session video demonstrating page-level toggling between DEV/PROD, im
   - Updated the health computation logic in [server.js](file:///d:/Antigravity/LPFF%20Sync%201/server.js) and the threshold status helper tooltips in [dashboard.html](file:///d:/Antigravity/LPFF%20Sync%201/dashboard.html).
   - Quiet database noise is now classified as **Warning** (Firms, Practitioners, Employment History, Audits), while major discrepancies (Banks, Applications, Certificates) are flagged as **Critical**.
 
+## 6. SQL Data Integrity Rules & Banks Manual Backfill
+- **Practitioners Admissions Scoping**: Narrowed the practitioners admission check rule to target only active Practising Members (`Aff_StatusLkp = 1 AND Aff_LegalPractitionerTypeLkp = 1108`) with zero admission flags, dropping the anomaly count from `17,295` to exactly **`410`**.
+- **New Bank Account Integrity Rule**: Integrated a new SQL Data Integrity rule to flag `"Active Account with missing Account Number"` (matching active open accounts in SQL where the account number is empty). This rule flags **`6,882`** records in production, which are displayed on the dashboard for human review alongside the existing firm-link rules.
+- **One-Time Manual Backfill**:
+  - Sequentially processed and successfully backfilled **`1,177`** active, valid-account-number records that were missing in Bubble.
+  * **Success Rate**: **`100%`** (1,177 attempted, 1,177 succeeded, 0 errors).
+  * **Duration**: **`224.34 seconds`** (~190ms per record including API delay).
+  * **Reconciliation Impact**: Triggered a fresh reconciliation run (after deleting the stale Bubble cache to force downloading the new live dataset). Verified that the **"Missing in Bubble"** count for bank accounts dropped from **`8,831`** to **`7,314`**.
+
+### Integrity & Dashboard Verification
+- **Screenshot showing the new SQL Data Integrity counts and the updated Banks counts**:
+  ![Banks SQL Data Integrity & Backfilled Counts](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/banks_integrity_rules_1786627351737.png)
+- **Interactive Verification Video**:
+  ![Live Dashboard Video Verification](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/verify_recon_dashboard_1786627244610.webp)
+
+

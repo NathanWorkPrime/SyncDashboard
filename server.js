@@ -4526,6 +4526,11 @@ const RECON_CONFIG = {
         name: "Active Account with no Firm Link",
         query: `SELECT Id FROM dbo.Core_BankAccounts 
                 WHERE Frwk_InactiveFlag = 0 AND DateClosed IS NULL AND Aff_FirmId IS NULL`
+      },
+      {
+        name: "Active Account with missing Account Number",
+        query: `SELECT Id FROM dbo.Core_BankAccounts 
+                WHERE Frwk_InactiveFlag = 0 AND DateClosed IS NULL AND (AccountNumber IS NULL OR LTRIM(RTRIM(AccountNumber)) = '')`
       }
     ],
     checkDiffs: (s, b) => {
