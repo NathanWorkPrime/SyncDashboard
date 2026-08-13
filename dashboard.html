@@ -6455,51 +6455,101 @@ async function loadLiveDashboard() {
             </td>
           </tr>
           
-          <tr id="details-${t.id}" style="display:none; background: var(--surface-2);">
-            <td colspan="10" style="padding: 16px 24px;">
-              <div style="display: flex; flex-direction: column; gap: 10px;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                  <div>
-                    <strong style="font-size: 13px; color: var(--text);">Direct Cause / Diagnosis:</strong>
-                    <div style="font-size: 12px; color: var(--text-sub); margin-top: 4px;">
-                      ${t.cause || 'No discrepancies or anomalies detected.'}
+          <tr id="details-${t.id}" style="display:none; background: var(--surface-2); border-top: none;">
+            <td colspan="10" style="padding: 6px 20px 16px 20px; border-top: none;">
+              <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 0;">
+                
+                <!-- Diagnosis Box -->
+                <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                  <strong style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-sub); display: block; margin-bottom: 4px;">Direct Cause / Diagnosis</strong>
+                  <div style="font-size: 12px; color: var(--text-2); line-height: 1.5;">
+                    ${t.cause || 'No discrepancies or anomalies detected.'}
+                  </div>
+                </div>
+
+                <!-- Dual List Grid -->
+                <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                  
+                  <!-- Discrepancy Box -->
+                  <div style="flex: 1 1 320px; background: var(--surface); border: 1px solid var(--border); border-top: 3px solid ${t.health === 'Critical' ? 'var(--red)' : t.health === 'Warning' ? 'var(--amber)' : 'var(--green)'}; border-radius: 6px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                    <strong style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-sub); display: block; margin-bottom: 10px;">SQL vs. Bubble Discrepancies</strong>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                      ${(function() {
+                        if (!window.reprocessIdsCache) window.reprocessIdsCache = {};
+                        window.reprocessIdsCache[t.id] = {
+                          ...t.discrepancy_ids,
+                          ...Object.fromEntries(Object.entries(t.integrity_issues || {}).map(([rule, val]) => [rule, val.ids]))
+                        };
+                        
+                        const categories = Object.entries(t.discrepancy_ids || {}).filter(([cat, ids]) => ids && ids.length > 0);
+                        if (categories.length === 0) {
+                          return `<div style="font-style: italic; font-size: 11px; color: var(--text-muted); padding: 4px 0;">No record-level sync discrepancies found.</div>`;
+                        }
+                        
+                        return categories.map(([cat, ids]) => {
+                          const count = ids.length;
+                          const sqlCount = t.sqlCount || 0;
+                          const pct = sqlCount > 0 ? (count / sqlCount) * 100 : 0;
+                          
+                          let color = 'var(--blue)';
+                          if (pct > 5.0) color = 'var(--red)';
+                          else if (pct > 1.5) color = 'var(--amber)';
+                          
+                          const escapedCat = cat.replace(/'/g, "\\'");
+                          return `
+                            <div style="border: 1px solid var(--border-2); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface-2);">
+                              <div style="display: flex; flex-direction: column; gap: 2px;">
+                                <span style="font-size: 14px; font-weight: 700; color: ${color}; line-height: 1.2;">
+                                  ${count.toLocaleString()}
+                                  <span style="font-size: 10px; font-weight: 500; color: var(--text-muted); margin-left: 2px;">(${pct.toFixed(2)}%)</span>
+                                </span>
+                                <span style="font-size: 11px; font-weight: 500; color: var(--text-sub);">${cat}</span>
+                              </div>
+                              <div class="action-btn-group" style="display: inline-flex; border: 1px solid var(--border-2); border-radius: 4px; overflow: hidden; background: var(--surface);">
+                                <button class="btn btn-secondary btn-sm" style="border: none; border-radius: 0; padding: 3px 8px; font-size: 10px; border-right: 1px solid var(--border-2); margin: 0; background: none; font-weight: 500;" onclick="event.stopPropagation(); openIdsModal('${t.id}', '${escapedCat}')">View</button>
+                                <button class="btn btn-secondary btn-sm" style="border: none; border-radius: 0; padding: 3px 8px; font-size: 10px; border-right: 1px solid var(--border-2); margin: 0; background: none; font-weight: 500;" onclick="event.stopPropagation(); copyCategoryIds('${t.id}', '${escapedCat}')">Copy</button>
+                                <button class="btn btn-secondary btn-sm" style="border: none; border-radius: 0; padding: 3px 8px; font-size: 10px; margin: 0; background: none; font-weight: 500;" onclick="event.stopPropagation(); exportCategoryIdsCsv('${t.id}', '${escapedCat}')">CSV</button>
+                              </div>
+                            </div>
+                          `;
+                        }).join('');
+                      })()}
                     </div>
                   </div>
+
+                  <!-- SQL Data Integrity Flags Box -->
+                  <div style="flex: 1 1 320px; background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--purple); border-radius: 6px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                    <strong style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-sub); display: block; margin-bottom: 10px;">SQL Data Integrity Flags</strong>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                      ${(function() {
+                        const rules = Object.entries(t.integrity_issues || {}).filter(([rule, data]) => data && data.ids && data.ids.length > 0);
+                        if (rules.length === 0) {
+                          return `<div style="font-style: italic; font-size: 11px; color: var(--text-muted); padding: 4px 0;">No internal SQL data integrity violations detected.</div>`;
+                        }
+                        
+                        return rules.map(([ruleName, ruleData]) => {
+                          const count = ruleData.count || 0;
+                          const escapedRule = ruleName.replace(/'/g, "\\'");
+                          return `
+                            <div style="border: 1px solid var(--border-2); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface-2);">
+                              <div style="display: flex; flex-direction: column; gap: 2px;">
+                                <span style="font-size: 14px; font-weight: 700; color: var(--purple); line-height: 1.2;">${count.toLocaleString()}</span>
+                                <span style="font-size: 11px; font-weight: 500; color: var(--text-sub);">${ruleName}</span>
+                              </div>
+                              <div class="action-btn-group" style="display: inline-flex; border: 1px solid var(--border-2); border-radius: 4px; overflow: hidden; background: var(--surface);">
+                                <button class="btn btn-secondary btn-sm" style="border: none; border-radius: 0; padding: 3px 8px; font-size: 10px; border-right: 1px solid var(--border-2); margin: 0; background: none; font-weight: 500;" onclick="event.stopPropagation(); openIdsModal('${t.id}', '${escapedRule}')">View</button>
+                                <button class="btn btn-secondary btn-sm" style="border: none; border-radius: 0; padding: 3px 8px; font-size: 10px; border-right: 1px solid var(--border-2); margin: 0; background: none; font-weight: 500;" onclick="event.stopPropagation(); copyCategoryIds('${t.id}', '${escapedRule}')">Copy</button>
+                                <button class="btn btn-secondary btn-sm" style="border: none; border-radius: 0; padding: 3px 8px; font-size: 10px; margin: 0; background: none; font-weight: 500;" onclick="event.stopPropagation(); exportCategoryIdsCsv('${t.id}', '${escapedRule}')">CSV</button>
+                              </div>
+                            </div>
+                          `;
+                        }).join('');
+                      })()}
+                    </div>
+                  </div>
+
                 </div>
                 
-                ${t.discrepancy_ids ? `
-                <div style="margin-top: 10px;">
-                  <strong style="font-size: 12px; color: var(--text);">Discrepancy Drilldown & Reprocessing:</strong>
-                  <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px; max-width: 500px;">
-                    ${(function() {
-                      if (!window.reprocessIdsCache) window.reprocessIdsCache = {};
-                      window.reprocessIdsCache[t.id] = t.discrepancy_ids;
-                      
-                      const categories = Object.entries(t.discrepancy_ids).filter(([cat, ids]) => ids && ids.length > 0);
-                      if (categories.length === 0) {
-                        return `<div style="font-style: italic; font-size: 11px; color: var(--text-sub);">No record-level discrepancy lists available.</div>`;
-                      }
-                      
-                      return categories.map(([cat, ids]) => {
-                        const escapedCat = cat.replace(/'/g, "\\'");
-                        return `
-                          <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px;">
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                              <span class="text-muted">${cat}:</span>
-                              <strong style="color: var(--red);">${ids.length.toLocaleString()}</strong>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 4px;">
-                              <button class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" onclick="event.stopPropagation(); openIdsModal('${t.id}', '${escapedCat}')">View IDs</button>
-                              <button class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" onclick="event.stopPropagation(); copyCategoryIds('${t.id}', '${escapedCat}')">Copy</button>
-                              <button class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" onclick="event.stopPropagation(); exportCategoryIdsCsv('${t.id}', '${escapedCat}')">CSV</button>
-                            </div>
-                          </div>
-                        `;
-                      }).join('');
-                    })()}
-                  </div>
-                </div>
-                ` : ''}
               </div>
             </td>
           </tr>

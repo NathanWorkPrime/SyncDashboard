@@ -4514,6 +4514,13 @@ const RECON_CONFIG = {
                WHERE Id IS NOT NULL`,
     getSqlKey: r => String(r.bank_id || '').trim().toLowerCase(),
     getBubbleKey: r => String(r['Id'] || r['id'] || '').trim().toLowerCase(),
+    integrityRules: [
+      {
+        name: "Active Account with no Firm Link",
+        query: `SELECT Id FROM dbo.Core_BankAccounts 
+                WHERE Frwk_InactiveFlag = 0 AND DateClosed IS NULL AND Aff_FirmId IS NULL`
+      }
+    ],
     checkDiffs: (s, b) => {
       const diffs = [];
       if (normalizeString(s.account_number) !== normalizeString(b['Account Number'])) {
@@ -5064,6 +5071,26 @@ async function runSingleTableReconciliation(id, isProduction = false, bubbleBase
       }
     });
 
+    const integrityIssues = {};
+    if (tableConfig.integrityRules) {
+      for (const rule of tableConfig.integrityRules) {
+        try {
+          const rows = await runQueryOnPrivatePool(rule.query);
+          const ids = rows.map(r => String(r.Id || r.id || r.bank_id || '').trim());
+          integrityIssues[rule.name] = {
+            count: ids.length,
+            ids: ids
+          };
+        } catch (ruleErr) {
+          console.error(`[Reconciliation] Error running integrity rule "${rule.name}" for ${id}:`, ruleErr.message);
+          integrityIssues[rule.name] = {
+            count: 0,
+            ids: []
+          };
+        }
+      }
+    }
+
     const stats = {
       sqlCount: sqlRecords.length,
       bubbleCount: bubbleRecords.length,
@@ -5073,7 +5100,8 @@ async function runSingleTableReconciliation(id, isProduction = false, bubbleBase
       missingInSQL,
       fieldMismatches,
       lastReconciledTime: new Date().toISOString(),
-      discrepancy_ids: discrepancyIds
+      discrepancy_ids: discrepancyIds,
+      integrity_issues: integrityIssues
     };
 
     const statsPath = path.join(__dirname, `stats_${id}.${env}.json`);
@@ -5123,7 +5151,8 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
       cause: null,
       drilldown: null,
       lastReconciledTime: null,
-      discrepancy_ids: {}
+      discrepancy_ids: {},
+      integrity_issues: {}
     };
   });
 
@@ -5169,6 +5198,7 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
         tableStats[id].fieldMismatches = stats.fieldMismatches;
         tableStats[id].lastReconciledTime = stats.lastReconciledTime;
         tableStats[id].discrepancy_ids = stats.discrepancy_ids || {};
+        tableStats[id].integrity_issues = stats.integrity_issues || {};
       } catch (e) {
         console.error(`Error loading stats JSON for ${id} (${env}):`, e.message);
       }

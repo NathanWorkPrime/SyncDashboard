@@ -6,7 +6,7 @@
   "missingInBubble": 3404,
   "missingInSQL": 1251,
   "fieldMismatches": 1434,
-  "lastReconciledTime": "2026-08-13T09:59:41.343Z",
+  "lastReconciledTime": "2026-08-13T10:13:58.290Z",
   "discrepancy_ids": {
     "Missing in Bubble": [
       "6044106",
@@ -8079,5 +8079,6 @@
       "396703",
       "396808"
     ]
-  }
+  },
+  "integrity_issues": {}
 }
