@@ -4590,9 +4590,11 @@ const RECON_CONFIG = {
     getBubbleKey: r => String(r['Practitioner Number'] || '').trim(),
     integrityRules: [
       {
-        name: "Active Practitioner with no Admission Types",
+        name: "Active Practising Member with no Admission Type Classification",
         query: `SELECT Id FROM dbo.Core_Persons 
-                WHERE Frwk_Discriminator = 'Aff.Practitioner' AND Frwk_InactiveFlag = 0 AND Aff_IsAttorney = 0 AND Aff_IsConveyancer = 0 AND Aff_IsNotary = 0 AND Aff_IsAdvocate = 0`
+                WHERE Frwk_Discriminator = 'Aff.Practitioner' AND Frwk_InactiveFlag = 0 
+                  AND Aff_StatusLkp = 1 AND Aff_LegalPractitionerTypeLkp = 1108
+                  AND Aff_IsAttorney = 0 AND Aff_IsConveyancer = 0 AND Aff_IsNotary = 0 AND Aff_IsAdvocate = 0`
       }
     ],
     checkDiffs: (s, b) => {
