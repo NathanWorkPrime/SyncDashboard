@@ -4594,31 +4594,75 @@ function normalizeBoolean(val) {
   return s === 'true' || s === '1' || s === 'yes' || s === 'active';
 }
 
+const DIFF_MAP = {
+  firms: {
+    'Name': 'Name Formatting',
+    'Inactive': 'Status Mismatch'
+  },
+  banks: {
+    'AccountNumber': 'Account Number mismatch',
+    'FirmNumber': 'Missing reference',
+    'Inactive': 'Inactive Flag'
+  },
+  practitioners: {
+    'Name': 'Whitespace mismatch',
+    'Inactive': 'Inactive Flag'
+  },
+  practitionersadm: {
+    'Attorney': 'Admission Flags mismatch',
+    'Conveyancer': 'Admission Flags mismatch',
+    'Notary': 'Admission Flags mismatch',
+    'Advocate': 'Admission Flags mismatch'
+  },
+  employmenthistory: {
+    'PractitionerNumber': 'Type mismatches',
+    'FirmNumber': 'Type mismatches',
+    'Inactive': 'Type mismatches'
+  },
+  audits: {
+    'FirmNo': 'Field mismatch',
+    'Year': 'Field mismatch',
+    'Inactive': 'Field mismatch'
+  }
+};
+
 function computeTableHealth(id, sqlCount, bubbleCount, missingInBubble, missingInSQL, fieldMismatches) {
   if (sqlCount === '—' || bubbleCount === '—' || typeof sqlCount !== 'number' || typeof bubbleCount !== 'number') {
     return 'Unknown';
   }
   
-  if (id === 'banks' || id === 'practitionersadm' || id === 'audits') {
+  const total = sqlCount || 1;
+  
+  // Escape Hatch: Missing records are weighted heavily toward Critical/Warning
+  const missingInBubblePct = (missingInBubble || 0) / total;
+  const missingInSQLPct = (missingInSQL || 0) / total;
+  
+  if (missingInBubblePct > 0.01 || missingInSQLPct > 0.01) {
     return 'Critical';
   }
-  if (id === 'practitioners') {
+  if (missingInBubblePct > 0.002 || missingInSQLPct > 0.002) {
     return 'Warning';
   }
 
-  const accepted = ACCEPTED_MISMATCHES[id] || 0;
-  const unexplained = Math.max(0, fieldMismatches - accepted);
-  const total = sqlCount || 1;
+  // Count alignment delta
   const delta = Math.abs(sqlCount - bubbleCount);
   const deltaPct = delta / total;
+  
+  // Unexplained field mismatch percentage
+  const accepted = ACCEPTED_MISMATCHES[id] || 0;
+  const unexplained = Math.max(0, fieldMismatches - accepted);
   const unexplainedPct = unexplained / total;
-  const missingInBubblePct = (missingInBubble || 0) / total;
-
-  if (deltaPct > 0.02 || unexplainedPct > 0.03 || missingInBubblePct > 0.02) {
+  
+  // General Thresholds:
+  // - Critical: deltaPct > 2.0% OR unexplainedPct > 2.0%
+  // - Warning: deltaPct > 0.5% OR unexplainedPct > 0.5%
+  // - Healthy: otherwise
+  if (deltaPct > 0.02 || unexplainedPct > 0.02) {
     return 'Critical';
-  } else if (deltaPct > 0.005 || unexplainedPct > 0.01 || missingInBubblePct > 0.005) {
+  } else if (deltaPct > 0.005 || unexplainedPct > 0.005) {
     return 'Warning';
   }
+  
   return 'Healthy';
 }
 
@@ -4775,32 +4819,75 @@ async function runSingleTableReconciliation(id) {
       bubbleGroups[key].push(r);
     });
 
-    let sqlDuplicates = 0;
-    Object.values(sqlGroups).forEach(list => {
-      if (list.length > 1) sqlDuplicates += (list.length - 1);
+    const sqlDuplicateIds = [];
+    Object.entries(sqlGroups).forEach(([key, list]) => {
+      if (list.length > 1) {
+        for (let i = 1; i < list.length; i++) {
+          const item = list[i];
+          sqlDuplicateIds.push(item.Id || item.id || item.bank_id || key);
+        }
+      }
     });
 
-    let bubbleDuplicates = 0;
-    Object.values(bubbleGroups).forEach(list => {
-      if (list.length > 1) bubbleDuplicates += (list.length - 1);
+    const bubbleDuplicateIds = [];
+    Object.entries(bubbleGroups).forEach(([key, list]) => {
+      if (list.length > 1) {
+        for (let i = 1; i < list.length; i++) {
+          const item = list[i];
+          bubbleDuplicateIds.push(item['_id'] || item['Id'] || item['id'] || item['ID'] || key);
+        }
+      }
     });
 
-    let missingInBubble = 0;
-    Object.keys(sqlGroups).forEach(key => {
-      if (!bubbleGroups[key]) missingInBubble++;
+    const missingInBubbleIds = [];
+    Object.entries(sqlGroups).forEach(([key, list]) => {
+      if (!bubbleGroups[key]) {
+        list.forEach(r => {
+          missingInBubbleIds.push(r.Id || r.id || r.bank_id || key);
+        });
+      }
     });
 
-    let missingInSQL = 0;
-    Object.keys(bubbleGroups).forEach(key => {
-      if (!sqlGroups[key]) missingInSQL++;
+    const missingInSQLIds = [];
+    Object.entries(bubbleGroups).forEach(([key, list]) => {
+      if (!sqlGroups[key]) {
+        list.forEach(item => {
+          missingInSQLIds.push(item['_id'] || item['Id'] || item['id'] || item['ID'] || key);
+        });
+      }
     });
+
+    let sqlDuplicates = sqlDuplicateIds.length;
+    let bubbleDuplicates = bubbleDuplicateIds.length;
+    let missingInBubble = missingInBubbleIds.length;
+    let missingInSQL = missingInSQLIds.length;
 
     let fieldMismatches = 0;
+    const discrepancyIds = {
+      "Missing in Bubble": missingInBubbleIds,
+      "Missing in SQL": missingInSQLIds,
+      "SQL Duplicates": sqlDuplicateIds,
+      "Bubble Duplicates": bubbleDuplicateIds
+    };
+
+    const tableDiffMap = DIFF_MAP[id] || {};
+    Object.values(tableDiffMap).forEach(label => {
+      if (!discrepancyIds[label]) discrepancyIds[label] = [];
+    });
+
     Object.entries(sqlGroups).forEach(([key, sqlList]) => {
       const bList = bubbleGroups[key];
       if (bList && sqlList.length === 1 && bList.length === 1) {
         const diffs = tableConfig.checkDiffs(sqlList[0], bList[0]);
-        if (diffs.length > 0) fieldMismatches++;
+        if (diffs.length > 0) {
+          fieldMismatches++;
+          const recordId = sqlList[0].Id || sqlList[0].id || sqlList[0].bank_id || key;
+          diffs.forEach(diffCode => {
+            const displayLabel = tableDiffMap[diffCode] || diffCode;
+            if (!discrepancyIds[displayLabel]) discrepancyIds[displayLabel] = [];
+            discrepancyIds[displayLabel].push(recordId);
+          });
+        }
       }
     });
 
@@ -4812,7 +4899,8 @@ async function runSingleTableReconciliation(id) {
       missingInBubble,
       missingInSQL,
       fieldMismatches,
-      lastReconciledTime: new Date().toISOString()
+      lastReconciledTime: new Date().toISOString(),
+      discrepancy_ids: discrepancyIds
     };
     
     const statsPath = path.join(__dirname, `stats_${id}.json`);
@@ -4858,7 +4946,8 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
       lastSyncTime: null,
       cause: null,
       drilldown: null,
-      lastReconciledTime: null
+      lastReconciledTime: null,
+      discrepancy_ids: {}
     };
   });
 
@@ -4903,6 +4992,7 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
         tableStats[id].missingInSQL = stats.missingInSQL;
         tableStats[id].fieldMismatches = stats.fieldMismatches;
         tableStats[id].lastReconciledTime = stats.lastReconciledTime;
+        tableStats[id].discrepancy_ids = stats.discrepancy_ids || {};
       } catch (e) {
         console.error(`Error loading stats JSON for ${id}:`, e.message);
       }
@@ -5201,8 +5291,24 @@ app.post('/dashboard/reconciliation/run', (req, res) => {
     
     ehChild.on('close', (ehCode) => {
       console.log(`[Reconciliation] EH script exited with code ${ehCode}`);
-      isReconciliationRunning = false;
-      reconciliationProgress = 'Reconciliation completed successfully.';
+      
+      Promise.all([
+        runSingleTableReconciliation('firms'),
+        runSingleTableReconciliation('banks'),
+        runSingleTableReconciliation('practitioners'),
+        runSingleTableReconciliation('practitionersadm'),
+        runSingleTableReconciliation('employmenthistory'),
+        runSingleTableReconciliation('audits')
+      ]).then(() => {
+        console.log('[Reconciliation] All stats JSON files regenerated successfully.');
+        LIVE_COUNTS_CACHE.expiresAt = 0; // Invalidate cache
+        isReconciliationRunning = false;
+        reconciliationProgress = 'Reconciliation completed successfully.';
+      }).catch(err => {
+        console.error('[Reconciliation] Stats JSON regeneration failed:', err.message);
+        isReconciliationRunning = false;
+        reconciliationProgress = 'Reconciliation completed successfully.';
+      });
     });
   });
   

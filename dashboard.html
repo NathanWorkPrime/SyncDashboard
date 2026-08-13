@@ -2027,6 +2027,32 @@
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('modal-shortcuts')">Close</button></div>
   </div>
 </div>
+
+<div class="modal-overlay" id="modal-reprocess-ids">
+  <div class="modal" style="max-width: 600px; width: 90%;">
+    <div class="modal-title" id="modal-reprocess-title">📋 Discrepancy Record IDs</div>
+    <div style="margin-bottom: 12px; display: flex; gap: 8px;">
+      <input type="text" id="reprocess-id-search" placeholder="Search ID..." oninput="filterReprocessIds()" style="flex:1; padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text);">
+      <button class="btn btn-secondary" onclick="clearReprocessSearch()" style="padding: 6px 12px;">Clear</button>
+    </div>
+    <div id="reprocess-ids-container" style="height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; background: var(--surface-2); font-family: monospace; font-size: 13px; display: flex; flex-direction: column; gap: 6px;">
+      <!-- IDs will be inserted here dynamically -->
+    </div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
+      <div id="reprocess-pagination-info" style="font-size: 12px; color: var(--text-sub);">Page 1 of 1 (0 items)</div>
+      <div style="display: flex; gap: 6px;">
+        <button class="btn btn-secondary btn-sm" id="btn-reprocess-prev" onclick="prevReprocessPage()" style="padding: 2px 8px; font-size: 11px;">Prev</button>
+        <button class="btn btn-secondary btn-sm" id="btn-reprocess-next" onclick="nextReprocessPage()" style="padding: 2px 8px; font-size: 11px;">Next</button>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top: 18px; display: flex; justify-content: flex-end; gap: 8px;">
+      <button class="btn btn-primary" id="btn-reprocess-copy" onclick="copyCurrentIds()" style="padding: 6px 12px;">Copy All IDs</button>
+      <button class="btn btn-primary" id="btn-reprocess-export" onclick="exportCurrentIdsCsv()" style="padding: 6px 12px;">Export CSV</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-reprocess-ids')" style="padding: 6px 12px;">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
 var TABLE_QUERIES = {
   'firms':              "SELECT * FROM [LPFF_FFC_ITG].[dbo].[itg_inn_firm_data]\nWHERE dev_run = 0\nAND trn_dte > '{LastSyncTime}'",
@@ -2332,6 +2358,159 @@ function showToast(msg, type) {
 
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Reprocessing Modal States
+var currentModalState = {
+  tableId: '',
+  categoryName: '',
+  allIds: [],
+  filteredIds: [],
+  page: 0,
+  pageSize: 50
+};
+
+function openIdsModal(tableId, categoryName) {
+  var categoryIds = (window.reprocessIdsCache && window.reprocessIdsCache[tableId] && window.reprocessIdsCache[tableId][categoryName]) || [];
+  
+  currentModalState.tableId = tableId;
+  currentModalState.categoryName = categoryName;
+  currentModalState.allIds = categoryIds;
+  currentModalState.filteredIds = categoryIds.slice();
+  currentModalState.page = 0;
+  
+  document.getElementById('modal-reprocess-title').innerHTML = `📋 ${categoryName} — ID List (${categoryIds.length.toLocaleString()} items)`;
+  document.getElementById('reprocess-id-search').value = '';
+  
+  renderReprocessPage();
+  openModal('modal-reprocess-ids');
+}
+
+function renderReprocessPage() {
+  var container = document.getElementById('reprocess-ids-container');
+  var prevBtn = document.getElementById('btn-reprocess-prev');
+  var nextBtn = document.getElementById('btn-reprocess-next');
+  var infoEl = document.getElementById('reprocess-pagination-info');
+  
+  var ids = currentModalState.filteredIds;
+  var page = currentModalState.page;
+  var limit = currentModalState.pageSize;
+  var total = ids.length;
+  var pagesCount = Math.max(1, Math.ceil(total / limit));
+  
+  if (page >= pagesCount) page = pagesCount - 1;
+  if (page < 0) page = 0;
+  currentModalState.page = page;
+  
+  var start = page * limit;
+  var end = Math.min(start + limit, total);
+  var chunk = ids.slice(start, end);
+  
+  if (total === 0) {
+    container.innerHTML = `<div style="text-align: center; color: var(--text-sub); padding: 20px;">No matching discrepancy record IDs found.</div>`;
+  } else {
+    container.innerHTML = chunk.map(function(id) {
+      return `<div style="padding: 4px 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); user-select: all;">${id}</div>`;
+    }).join('');
+  }
+  
+  infoEl.innerHTML = `Page ${page + 1} of ${pagesCount} (${start.toLocaleString()}-${end.toLocaleString()} of ${total.toLocaleString()} items)`;
+  
+  prevBtn.disabled = page === 0;
+  nextBtn.disabled = page === pagesCount - 1;
+}
+
+function filterReprocessIds() {
+  var query = document.getElementById('reprocess-id-search').value.trim().toLowerCase();
+  if (!query) {
+    currentModalState.filteredIds = currentModalState.allIds.slice();
+  } else {
+    currentModalState.filteredIds = currentModalState.allIds.filter(function(id) {
+      return String(id).toLowerCase().includes(query);
+    });
+  }
+  currentModalState.page = 0;
+  renderReprocessPage();
+}
+
+function clearReprocessSearch() {
+  document.getElementById('reprocess-id-search').value = '';
+  filterReprocessIds();
+}
+
+function prevReprocessPage() {
+  if (currentModalState.page > 0) {
+    currentModalState.page--;
+    renderReprocessPage();
+  }
+}
+
+function nextReprocessPage() {
+  var pagesCount = Math.ceil(currentModalState.filteredIds.length / currentModalState.pageSize);
+  if (currentModalState.page < pagesCount - 1) {
+    currentModalState.page++;
+    renderReprocessPage();
+  }
+}
+
+function copyCurrentIds() {
+  var ids = currentModalState.filteredIds;
+  if (ids.length === 0) {
+    showToast('No IDs to copy', 'error');
+    return;
+  }
+  var str = ids.join(',');
+  navigator.clipboard.writeText(str).then(function() {
+    showToast(`Copied ${ids.length.toLocaleString()} IDs to clipboard`, 'success');
+  }).catch(function(err) {
+    showToast('Failed to copy: ' + err.message, 'error');
+  });
+}
+
+function copyCategoryIds(tableId, categoryName) {
+  var categoryIds = (window.reprocessIdsCache && window.reprocessIdsCache[tableId] && window.reprocessIdsCache[tableId][categoryName]) || [];
+  if (categoryIds.length === 0) {
+    showToast('No IDs to copy', 'error');
+    return;
+  }
+  var str = categoryIds.join(',');
+  navigator.clipboard.writeText(str).then(function() {
+    showToast(`Copied ${categoryIds.length.toLocaleString()} IDs to clipboard`, 'success');
+  }).catch(function(err) {
+    showToast('Failed to copy: ' + err.message, 'error');
+  });
+}
+
+function exportCurrentIdsCsv() {
+  var ids = currentModalState.filteredIds;
+  if (ids.length === 0) {
+    showToast('No IDs to export', 'error');
+    return;
+  }
+  triggerDownloadCsv(currentModalState.tableId, currentModalState.categoryName, ids);
+}
+
+// Global reference mapping for triggerDownloadCsv uri safety
+function exportCategoryIdsCsv(tableId, categoryName) {
+  var categoryIds = (window.reprocessIdsCache && window.reprocessIdsCache[tableId] && window.reprocessIdsCache[tableId][categoryName]) || [];
+  if (categoryIds.length === 0) {
+    showToast('No IDs to export', 'error');
+    return;
+  }
+  triggerDownloadCsv(tableId, categoryName, categoryIds);
+}
+
+function triggerDownloadCsv(tableId, categoryName, ids) {
+  var csvContent = "RecordID\r\n" + ids.join("\r\n");
+  var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `discrepancy_ids_${tableId}_${categoryName.replace(/\s+/g, '_')}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast(`CSV exported for ${ids.length.toLocaleString()} IDs`, 'success');
+}
 
 // ── FORMATTERS ──
 function formatTime(iso) {
@@ -6243,16 +6422,36 @@ async function loadLiveDashboard() {
                   </div>
                 </div>
                 
-                ${t.drilldown ? `
+                ${t.discrepancy_ids ? `
                 <div style="margin-top: 10px;">
-                  <strong style="font-size: 12px; color: var(--text);">Discrepancy Drilldown:</strong>
-                  <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px;">
-                    ${Object.entries(t.drilldown).map(([cat, count]) => `
-                      <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 12px; display: flex; align-items: center; gap: 8px; font-size: 12px;">
-                        <span class="text-muted">${cat}:</span>
-                        <strong style="color: var(--red);">${count.toLocaleString()}</strong>
-                      </div>
-                    `).join('')}
+                  <strong style="font-size: 12px; color: var(--text);">Discrepancy Drilldown & Reprocessing:</strong>
+                  <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px; max-width: 500px;">
+                    ${(function() {
+                      if (!window.reprocessIdsCache) window.reprocessIdsCache = {};
+                      window.reprocessIdsCache[t.id] = t.discrepancy_ids;
+                      
+                      const categories = Object.entries(t.discrepancy_ids).filter(([cat, ids]) => ids && ids.length > 0);
+                      if (categories.length === 0) {
+                        return `<div style="font-style: italic; font-size: 11px; color: var(--text-sub);">No record-level discrepancy lists available.</div>`;
+                      }
+                      
+                      return categories.map(([cat, ids]) => {
+                        const escapedCat = cat.replace(/'/g, "\\'");
+                        return `
+                          <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                              <span class="text-muted">${cat}:</span>
+                              <strong style="color: var(--red);">${ids.length.toLocaleString()}</strong>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                              <button class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" onclick="event.stopPropagation(); openIdsModal('${t.id}', '${escapedCat}')">View IDs</button>
+                              <button class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" onclick="event.stopPropagation(); copyCategoryIds('${t.id}', '${escapedCat}')">Copy</button>
+                              <button class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" onclick="event.stopPropagation(); exportCategoryIdsCsv('${t.id}', '${escapedCat}')">CSV</button>
+                            </div>
+                          </div>
+                        `;
+                      }).join('');
+                    })()}
                   </div>
                 </div>
                 ` : ''}
