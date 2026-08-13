@@ -41,3 +41,23 @@ All changes to make the Reconciliation and Caching system environment-aware and 
 #### Live Verification Video
 The browser session video demonstrating page-level toggling between DEV/PROD, immediate update of the topbar badge, instant reload of namespaced stats/counts, and persistence across refreshes is saved at:
 ![Live Verification Recording](reconciliation_docs/verify_env_awareness_1786603559100.webp)
+
+## 5. Comparator Alignment & Health Thresholds Retuning
+- **Employment History Field-Mismatch Fix**:
+  - **Problem**: Mismatch count was ~98% (`348,439` records) due to camelCase property references (`practitioner_number`/`firm_number`/`inactive`) that did not exist on raw Bubble records.
+  - **Solution**: Changed properties to their correct space-separated and capitalized Bubble keys (`'Practitioner Number'`, `'Firm Number'`, `'Inactive'`). Field mismatches dropped instantly to **`1,793`** (~0.5%).
+- **Other Tables' Comparator Alignments**:
+  - **Firms/Practitioners/Audits**: Standardized status check to match `'Inactive Flag'` (or `'inactiveflag'`).
+  - **Practitioners Admissions**: Resolved a spelling variation where Conveyancer is stored as `'Conveyencer'` (with an `e`) in Bubble.
+  - **Banks Key Mapping & Status Inversion**:
+    - Mapped `firm_number` $\rightarrow$ `'Allocated Firm Number'` in Bubble.
+    - Resolved a status inversion where `"Active"` (meaning NOT inactive, i.e. `inactive = false`) was parsed by `normalizeBoolean` as `true` (meaning inactive), causing 107,257 false positive mismatches.
+    - Implemented a custom status parser for bank accounts. Bank mismatches dropped to **`55,705`**, with 99.99% (`55,703` records) confirmed as the "SQL firm set, Bubble blank" historical delta case (no logic bugs remain).
+- **Option 2 Health Thresholds**:
+  - Implemented the user-approved Option 2 bands for missing records:
+    - 🟢 **Healthy**: $\le 1.5\%$ missing records
+    - 🟡 **Warning**: $> 1.5\%$ and $\le 5.0\%$ missing records
+    - 🔴 **Critical**: $> 5.0\%$ missing records
+  - Updated the health computation logic in [server.js](file:///d:/Antigravity/LPFF%20Sync%201/server.js) and the threshold status helper tooltips in [dashboard.html](file:///d:/Antigravity/LPFF%20Sync%201/dashboard.html).
+  - Quiet database noise is now classified as **Warning** (Firms, Practitioners, Employment History, Audits), while major discrepancies (Banks, Applications, Certificates) are flagged as **Critical**.
+
