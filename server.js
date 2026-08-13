@@ -50,7 +50,7 @@ const importsConfig = {
 };
 
 
-app.use(function(req, res, next) {
+app.use(function (req, res, next) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-bubble-base-url, x-environment');
@@ -62,7 +62,7 @@ app.use(function(req, res, next) {
 app.use(express.static('public'));
 
 // Serve dashboard.html
-app.get('/dashboard', function(req, res) {
+app.get('/dashboard', function (req, res) {
   res.sendFile(__dirname + '/dashboard.html');
 });
 
@@ -71,12 +71,12 @@ app.post('/deploy', express.raw({ type: 'application/zip', limit: '100mb' }), as
   try {
     const authHeader = req.headers.authorization;
     const expectedToken = process.env.DEPLOY_TOKEN;
-    
+
     if (!expectedToken) {
       console.error('❌ Deployment failed: DEPLOY_TOKEN is not configured on the server');
       return res.status(500).json({ success: false, error: 'Deployment token not configured on server' });
     }
-    
+
     if (!authHeader || authHeader !== `Bearer ${expectedToken}`) {
       console.error('❌ Deployment failed: Invalid or missing authorization token');
       return res.status(401).json({ success: false, error: 'Unauthorized' });
@@ -108,24 +108,24 @@ app.post('/deploy', express.raw({ type: 'application/zip', limit: '100mb' }), as
   }
 });
 
-app.get('/health', function(req, res) {
+app.get('/health', function (req, res) {
   const isProduction = req.headers['x-environment'] === 'production';
   res.json({
-    status:       'ok',
-    uptime:       process.uptime(),
-    nodeVersion:  process.version,
-    port:         3000,
-    environment:  isProduction ? 'production' : 'development',
+    status: 'ok',
+    uptime: process.uptime(),
+    nodeVersion: process.version,
+    port: 3000,
+    environment: isProduction ? 'production' : 'development',
     sqlConnected: true,
-    sqlServer:    config.server,
-    bubbleApp:    'fidfunddev',
+    sqlServer: config.server,
+    bubbleApp: 'fidfunddev',
   });
 });
 
 // ── Bubble Configuration (Environment-aware) ─────────────────────────────────
 const DEFAULT_BUBBLE_ENV = process.env.DEFAULT_BUBBLE_ENV || 'development';
-const bubbleToken = DEFAULT_BUBBLE_ENV === 'production' 
-  ? process.env.BUBBLE_TOKEN_PROD 
+const bubbleToken = DEFAULT_BUBBLE_ENV === 'production'
+  ? process.env.BUBBLE_TOKEN_PROD
   : process.env.BUBBLE_TOKEN_DEV;
 
 app.get('/health/bubble', async (req, res) => {
@@ -144,27 +144,27 @@ app.get('/get-watermarks', async (req, res) => {
   // Determine which IDs to use based on the actual Bubble URL (source of truth)
   const isDevVersion = bubbleBase.includes('/version-test/');
   const ids = getSyncConfigIds(!isDevVersion); // true = LIVE, false = DEV
-  
+
   console.log('🔍 [get-watermarks] Bubble Base:', bubbleBase);
   console.log('🔍 [get-watermarks] Version:', isDevVersion ? 'DEV (version-test)' : 'LIVE (main)');
   console.log('🔍 [get-watermarks] Using Config IDs:', isDevVersion ? 'DEV' : 'LIVE');
   console.log('🔍 [get-watermarks] IDs:', JSON.stringify(ids, null, 2));
-  
+
   try {
     const watermarks = {};
     const tables = ['firms', 'banks', 'practitioners', 'practitionersadm', 'employmentHistory', 'audits'];
-    
+
     for (const table of tables) {
       try {
         const url = `${bubbleBase}obj/syncconfig/${ids[table]}`;
         console.log(`  → Fetching ${table}: ${url}`);
-        
+
         const configRes = await fetch(url, {
           headers: { Authorization: `Bearer ${bubbleToken}` }
         });
-        
+
         console.log(`  ← ${table}: HTTP ${configRes.status}`);
-        
+
         if (configRes.ok) {
           const data = await configRes.json();
           console.log(`  ✓ ${table} data:`, JSON.stringify(data, null, 2));
@@ -177,7 +177,7 @@ app.get('/get-watermarks', async (req, res) => {
         console.error(`  ❌ ${table} exception:`, err.message);
       }
     }
-    
+
     console.log('✅ [get-watermarks] Final watermarks:', JSON.stringify(watermarks, null, 2));
     res.json({ success: true, watermarks });
   } catch (err) {
@@ -205,19 +205,19 @@ async function fetchWithRetry(url, options = {}, context = '') {
   // Extract endpoint for circuit breaker (e.g., "/wf/get_firms")
   const endpoint = new URL(url).pathname;
   const breaker = getCircuitBreaker(endpoint);
-  
+
   let lastErr;
-  
+
   for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
     try {
       // ✅ Wrap fetch in circuit breaker
       const res = await breaker.execute(async () => {
         return await fetchWithTimeout(url, options, 15000);
       }, context);
-      
+
       // ✅ Read body once and cache it
       const bodyText = await res.text();
-      
+
       // Create proxy object that allows multiple reads
       const responseProxy = {
         ok: res.ok,
@@ -234,32 +234,32 @@ async function fetchWithRetry(url, options = {}, context = '') {
           }
         }
       };
-      
+
       // Success
       if (res.ok) {
         if (attempt > 1) console.log(`✅ [${context}] Succeeded on attempt ${attempt}`);
         return responseProxy;
       }
-      
+
       // Non-retryable error (4xx except 408/429)
       if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) {
         console.error(`❌ [${context}] Non-retryable error: HTTP ${res.status}`);
         return responseProxy;
       }
-      
+
       // Retryable error (5xx, 408, 429, timeouts)
       lastErr = new Error(`HTTP ${res.status}: ${bodyText.substring(0, 200)}`);
       lastErr.statusCode = res.status;
-      
+
       if (attempt < RETRY_ATTEMPTS) {
         const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
         console.warn(`⚠️  [${context}] Attempt ${attempt}/${RETRY_ATTEMPTS} failed (HTTP ${res.status}), retrying in ${delay}ms...`);
         await sleep(delay);
       }
-      
+
     } catch (networkErr) {
       lastErr = networkErr;
-      
+
       // Check if error is from circuit breaker
       if (networkErr.message.includes('Circuit breaker OPEN')) {
         console.error(`❌ [${context}] ${networkErr.message}`);
@@ -270,13 +270,13 @@ async function fetchWithRetry(url, options = {}, context = '') {
           json: async () => ({ error: networkErr.message })
         };
       }
-      
+
       // Check if error is retryable
-      const isRetryable = networkErr.name === 'AbortError' || 
-                         networkErr.code === 'ECONNRESET' || 
-                         networkErr.code === 'ETIMEDOUT' ||
-                         networkErr.code === 'ENOTFOUND';
-      
+      const isRetryable = networkErr.name === 'AbortError' ||
+        networkErr.code === 'ECONNRESET' ||
+        networkErr.code === 'ETIMEDOUT' ||
+        networkErr.code === 'ENOTFOUND';
+
       if (!isRetryable) {
         console.error(`❌ [${context}] Non-retryable network error: ${networkErr.message}`);
         return {
@@ -286,7 +286,7 @@ async function fetchWithRetry(url, options = {}, context = '') {
           json: async () => ({ error: networkErr.message })
         };
       }
-      
+
       if (attempt < RETRY_ATTEMPTS) {
         const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
         console.warn(`⚠️  [${context}] Attempt ${attempt}/${RETRY_ATTEMPTS} network error (${networkErr.code || networkErr.message}), retrying in ${delay}ms...`);
@@ -294,7 +294,7 @@ async function fetchWithRetry(url, options = {}, context = '') {
       }
     }
   }
-  
+
   // All retries exhausted
   console.error(`❌ [${context}] All ${RETRY_ATTEMPTS} attempts failed: ${lastErr?.message}`);
   return {
@@ -345,7 +345,7 @@ class CircuitBreaker {
 
   onSuccess(context) {
     this.failures = 0;
-    
+
     if (this.state === 'HALF_OPEN') {
       this.successes++;
       if (this.successes >= this.successThreshold) {
@@ -358,7 +358,7 @@ class CircuitBreaker {
   onFailure(context) {
     this.failures++;
     this.successes = 0;
-    
+
     if (this.failures >= this.failureThreshold) {
       this.state = 'OPEN';
       this.nextAttempt = Date.now() + this.timeout;
@@ -400,8 +400,8 @@ function getCircuitBreaker(endpoint) {
 
 
 // ─── Bubble logging URLs (always use production — logs go to one place) ───────
-const bubbleSyncLogUrl         = "https://fidfunddev.site/api/1.1/obj/synclog";
-const bubbleSyncErrorUrl       = "https://fidfunddev.site/api/1.1/obj/syncerror";
+const bubbleSyncLogUrl = "https://fidfunddev.site/api/1.1/obj/synclog";
+const bubbleSyncErrorUrl = "https://fidfunddev.site/api/1.1/obj/syncerror";
 const bubbleSyncPerformanceUrl = "https://fidfunddev.site/api/1.1/obj/syncperformance";
 
 async function logSyncRun(table, recordsSynced, errors, duration, status, errorDetails = '', trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE) {
@@ -425,39 +425,39 @@ async function logSyncRun(table, recordsSynced, errors, duration, status, errorD
 async function logSyncError(table, recordId, errorMessage, bubbleBase = DEFAULT_BUBBLE_BASE, errorType = 'API', errorCode = null, stackTrace = null) {
   try {
     const payload = {
-      Table:        table,
-      RecordID:     String(recordId),
+      Table: table,
+      RecordID: String(recordId),
       ErrorMessage: errorMessage,
-      ErrorType:    errorType,    // 'API' | 'SQL' | 'Validation' | 'Network' | 'Watermark'
-      ErrorCode:    errorCode,    // HTTP status or SQL error code
-      StackTrace:   stackTrace,   // For debugging
-      Resolved:     false,
-      Timestamp:    new Date().toISOString(),
-      Severity:     determineSeverity(errorType, errorCode),
+      ErrorType: errorType,    // 'API' | 'SQL' | 'Validation' | 'Network' | 'Watermark'
+      ErrorCode: errorCode,    // HTTP status or SQL error code
+      StackTrace: stackTrace,   // For debugging
+      Resolved: false,
+      Timestamp: new Date().toISOString(),
+      Severity: determineSeverity(errorType, errorCode),
     };
-    
+
     await fetch(bubbleBase + 'obj/syncerror', {
       method: 'POST',
       headers: { Authorization: `Bearer ${bubbleToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    
+
     console.error(`📝 [ERROR LOG] ${table} | ${errorType} | ${recordId} | ${errorMessage}`);
-  } catch (err) { 
-    console.error('❌ Failed to log sync error:', err.message); 
+  } catch (err) {
+    console.error('❌ Failed to log sync error:', err.message);
   }
 }
 
 function determineSeverity(errorType, errorCode) {
   // Critical: SQL connection failures, watermark issues
   if (errorType === 'SQL' || errorType === 'Watermark') return 'Critical';
-  
+
   // Warning: Retryable errors (5xx, timeouts)
   if (errorCode >= 500 || errorCode === 408 || errorCode === 0) return 'Warning';
-  
+
   // Error: Client errors (4xx)
   if (errorCode >= 400 && errorCode < 500) return 'Error';
-  
+
   return 'Warning';
 }
 
@@ -482,21 +482,21 @@ const DEFAULT_BUBBLE_BASE = DEFAULT_BUBBLE_ENV === 'production'
   : process.env.BUBBLE_BASE_DEV;
 
 const SYNC_CONFIG_IDS_LIVE = {
-  firms:             '1778651429513x106836507335746900',
-  banks:             '1778747218142x780024036299171500',
-  practitioners:     '1778756787140x340802730669506050',
-  practitionersadm:  '1778763877520x680883048056017900',
+  firms: '1778651429513x106836507335746900',
+  banks: '1778747218142x780024036299171500',
+  practitioners: '1778756787140x340802730669506050',
+  practitionersadm: '1778763877520x680883048056017900',
   employmentHistory: '1779089119064x383538508200077060',
-  audits:            '1779173702392x524303161016420350',
+  audits: '1779173702392x524303161016420350',
 };
 
 const SYNC_CONFIG_IDS_DEV = {
-  firms:             '1780037762466x950438702639648800',
-  banks:             '1780037750841x136368703100589570',
-  practitioners:     '1780037739567x188360254176174400',
-  practitionersadm:  '1780037726664x821761837371745000',
+  firms: '1780037762466x950438702639648800',
+  banks: '1780037750841x136368703100589570',
+  practitioners: '1780037739567x188360254176174400',
+  practitionersadm: '1780037726664x821761837371745000',
   employmentHistory: '1780037715598x356395649460983900',
-  audits:            '1780037703210x808105678834144100',
+  audits: '1780037703210x808105678834144100',
 };
 
 function getSyncConfigIds(isProduction = false) {
@@ -524,18 +524,18 @@ async function applyRateLimit(entityName, recordIndex) {
 function calculateGlobalMinWatermark(allProcessedRows, dateField, originalWatermark) {
   // Filter to only rows that are AFTER the original watermark
   const futureRows = allProcessedRows.filter(r => new Date(r[dateField]) > new Date(originalWatermark));
-  
+
   // If no future rows, keep the original watermark
   if (futureRows.length === 0) {
     return originalWatermark;
   }
-  
+
   // Find the MINIMUM date among all future rows
   const minDate = futureRows.reduce((min, r) => {
     const d = new Date(r[dateField]);
     return d < min ? d : min;
   }, new Date(futureRows[0][dateField]));
-  
+
   return new Date(minDate.getTime()).toISOString();
 }
 
@@ -585,10 +585,10 @@ async function doSyncFirms(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
       }
       console.warn(`[doSyncFirms] Proceeding without watermark because customIds is set: ${fetchErr.message}`);
     }
-    
+
     const start = Date.now();
     console.log(`Syncing firms updated after: ${originalWatermark} (TOP ${topLimit} distinct FirmNos) [devRun=${devRun}]`);
-    
+
     // ── SQL Connection with error handling ──
     try {
       pool = await sql.connect(config);
@@ -596,14 +596,14 @@ async function doSyncFirms(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
       await logSyncError('Firms', 'N/A', `SQL connection failed: ${sqlErr.message}`, bubbleBase, 'SQL', sqlErr.code, sqlErr.stack);
       throw sqlErr;
     }
-// ── SSE: Broadcast sync started ──
-sendProgress('firms', {
-  current: 0,
-  total: customIds && customIds.length > 0 ? customIds.length : topLimit,
-  percent: 0,
-  message: 'Starting sync...',
-  status: 'started'
-});
+    // ── SSE: Broadcast sync started ──
+    sendProgress('firms', {
+      current: 0,
+      total: customIds && customIds.length > 0 ? customIds.length : topLimit,
+      percent: 0,
+      message: 'Starting sync...',
+      status: 'started'
+    });
 
     let distinctFirmNos;
     let totalFirms;
@@ -671,53 +671,53 @@ sendProgress('firms', {
     // Register this sync
     const syncId = generateSyncId('firms');
     registerSync(syncId, 'firms');
-    
+
     // Reset stop flag for this entity
     stopFlags['firms'] = false;
 
-for (const firmNo of distinctFirmNos) {
-  // ── CHECK STOP SIGNAL ──
-  if (shouldStopSync('firms', syncId)) {
-    console.log(`\n🛑 [STOP SIGNAL] Firms sync ${syncId} stopped by user request`);
-    console.log(`📊 Partial Stats: ${success} records synced from ${firmIndex}/${distinctFirmNos.length} firms`);
-    
-    // Unregister sync
-    unregisterSync(syncId);
-    
-    // Log partial completion
-    const dur = Date.now() - start;
-    await logSyncRun('Firms', success, errors, dur, 'stopped', failedIds.join(', '), trigger, bubbleBase);
-    await logSyncPerformance('Firms', dur, success, 'stopped', bubbleBase);
-    
-    // SSE: Broadcast stopped
-    sendProgress('firms', {
-      current: firmIndex,
-      total: distinctFirmNos.length,
-      percent: Math.round((firmIndex / distinctFirmNos.length) * 100),
-      message: `🛑 Sync stopped by user (${success} records synced)`,
-      status: 'stopped',
-      recordsSynced: success,
-      errors: errors
-    });
-    
-    return { success: false, synced: success, errors, entities: firmIndex, totalRows, stopped: true };
-  }
+    for (const firmNo of distinctFirmNos) {
+      // ── CHECK STOP SIGNAL ──
+      if (shouldStopSync('firms', syncId)) {
+        console.log(`\n🛑 [STOP SIGNAL] Firms sync ${syncId} stopped by user request`);
+        console.log(`📊 Partial Stats: ${success} records synced from ${firmIndex}/${distinctFirmNos.length} firms`);
 
-  firmIndex++;
-  const progressPercent = Math.round((firmIndex / distinctFirmNos.length) * 100);
-  console.log(`\n${'─'.repeat(60)}`);
-  console.log(`📊 Progress: ${firmIndex}/${distinctFirmNos.length} firms (${progressPercent}%)`);
-  console.log(`🔍 [SQL] Fetching rows for FirmNo ${firmNo}...`);
-  
-  // ── SSE: Broadcast progress ──
-  sendProgress('firms', {
-    current: firmIndex,
-    total: distinctFirmNos.length,
-    percent: progressPercent,
-    message: `Processing FirmNo ${firmNo}...`,
-    entity: firmNo
-  });
-    
+        // Unregister sync
+        unregisterSync(syncId);
+
+        // Log partial completion
+        const dur = Date.now() - start;
+        await logSyncRun('Firms', success, errors, dur, 'stopped', failedIds.join(', '), trigger, bubbleBase);
+        await logSyncPerformance('Firms', dur, success, 'stopped', bubbleBase);
+
+        // SSE: Broadcast stopped
+        sendProgress('firms', {
+          current: firmIndex,
+          total: distinctFirmNos.length,
+          percent: Math.round((firmIndex / distinctFirmNos.length) * 100),
+          message: `🛑 Sync stopped by user (${success} records synced)`,
+          status: 'stopped',
+          recordsSynced: success,
+          errors: errors
+        });
+
+        return { success: false, synced: success, errors, entities: firmIndex, totalRows, stopped: true };
+      }
+
+      firmIndex++;
+      const progressPercent = Math.round((firmIndex / distinctFirmNos.length) * 100);
+      console.log(`\n${'─'.repeat(60)}`);
+      console.log(`📊 Progress: ${firmIndex}/${distinctFirmNos.length} firms (${progressPercent}%)`);
+      console.log(`🔍 [SQL] Fetching rows for FirmNo ${firmNo}...`);
+
+      // ── SSE: Broadcast progress ──
+      sendProgress('firms', {
+        current: firmIndex,
+        total: distinctFirmNos.length,
+        percent: progressPercent,
+        message: `Processing FirmNo ${firmNo}...`,
+        entity: firmNo
+      });
+
       const step2 = pool.request();
       step2.input("firmNo", sql.Int, firmNo);
       step2.input("devRun", sql.Int, devRun);
@@ -759,38 +759,38 @@ for (const firmNo of distinctFirmNos) {
         console.log(`  [FirmNo ${firm.FirmNo}] is_latest_row: ${isLatestRow ? "true" : "false"} | trn_dte: ${firm.LastSyncTime}`);
         try {
           const payload = {
-            firm_number:             firm.FirmNo !== null ? String(firm.FirmNo) : null,
-            firm_name:               firm.FirmName,
-            firm_name_caps:          firm.FirmNameCaps,
-            firm_type:               firm.FirmType,
-            discriminator:           firm.Discriminator,
-            id:                      firm.ID,
-            email_1:                 firm.Email1,
-            fax_number:              firm.FaxNumber,
-            mobile_number_1:         firm.MobileNumber1,
-            postal_address:          firm.PostalAddress,
-            physical_address:        firm.PhysicalAddress,
-            audited_separately:      firm.AuditedSeparately !== null ? String(firm.AuditedSeparately) : "0",
-            auditor_id:              firm.AuditorID !== null ? String(firm.AuditorID) : "0",
-            financial_year_end:      firm.FinancialYearEnd,
-            firm_accounting_status:  firm.FirmAccountingStatus !== null ? String(firm.FirmAccountingStatus) : null,
+            firm_number: firm.FirmNo !== null ? String(firm.FirmNo) : null,
+            firm_name: firm.FirmName,
+            firm_name_caps: firm.FirmNameCaps,
+            firm_type: firm.FirmType,
+            discriminator: firm.Discriminator,
+            id: firm.ID,
+            email_1: firm.Email1,
+            fax_number: firm.FaxNumber,
+            mobile_number_1: firm.MobileNumber1,
+            postal_address: firm.PostalAddress,
+            physical_address: firm.PhysicalAddress,
+            audited_separately: firm.AuditedSeparately !== null ? String(firm.AuditedSeparately) : "0",
+            auditor_id: firm.AuditorID !== null ? String(firm.AuditorID) : "0",
+            financial_year_end: firm.FinancialYearEnd,
+            firm_accounting_status: firm.FirmAccountingStatus !== null ? String(firm.FirmAccountingStatus) : null,
             senior_partner_director: firm.SeniorPartnerDirector !== null ? String(firm.SeniorPartnerDirector) : "0",
-            docex_number:            firm.DocexNumber !== null ? String(firm.DocexNumber) : null,
-            ffc_firm_number:         firm.FFCFirmNumber !== null ? String(firm.FFCFirmNumber) : null,
-            ls_firm_number:          firm.LSFirmNumber !== null ? String(firm.LSFirmNumber) : null,
-            province:                CIRCLE_MAP[firm.Circle] ?? null,
-            status:                  firm.ActiveFlag,
-            red_flag:                firm.RedFlag === "Y" ? "yes" : "no",
-            inactive_flag:           firm.InactiveFlag === "Y" ? true : false,
-            inactive_reason:         firm.InactiveReason,
-            inactivated_timestamp:   firm.InactivatedTimestamp,
-            main_branch:             firm.MainBranch !== null ? Number(firm.MainBranch) : null,
-            main_branch_firm_id:     firm.MainBranchFirmId !== null ? String(firm.MainBranchFirmId) : null,
-            date_formed:             firm.DateFormed,
-            firm_closure_date:       firm.FirmClosureDate,
-            firm_closure_reason:     firm.FirmClosureReason,
-            firm_closure_comments:   firm.FirmClosureComments,
-            is_latest_row:           isLatestRow ? "yes" : "no",
+            docex_number: firm.DocexNumber !== null ? String(firm.DocexNumber) : null,
+            ffc_firm_number: firm.FFCFirmNumber !== null ? String(firm.FFCFirmNumber) : null,
+            ls_firm_number: firm.LSFirmNumber !== null ? String(firm.LSFirmNumber) : null,
+            province: CIRCLE_MAP[firm.Circle] ?? null,
+            status: firm.ActiveFlag,
+            red_flag: firm.RedFlag === "Y" ? "yes" : "no",
+            inactive_flag: firm.InactiveFlag === "Y" ? true : false,
+            inactive_reason: firm.InactiveReason,
+            inactivated_timestamp: firm.InactivatedTimestamp,
+            main_branch: firm.MainBranch !== null ? Number(firm.MainBranch) : null,
+            main_branch_firm_id: firm.MainBranchFirmId !== null ? String(firm.MainBranchFirmId) : null,
+            date_formed: firm.DateFormed,
+            firm_closure_date: firm.FirmClosureDate,
+            firm_closure_reason: firm.FirmClosureReason,
+            firm_closure_comments: firm.FirmClosureComments,
+            is_latest_row: isLatestRow ? "yes" : "no",
           };
 
           const wr = await fetchWithRetry(bubbleBase + 'wf/get_firms', {
@@ -798,34 +798,34 @@ for (const firmNo of distinctFirmNos) {
             headers: { Authorization: `Bearer ${bubbleToken}`, "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           }, `Firms:${firm.FirmNo}`);
-if (wr.ok) {
-  console.log(`  ✅ Synced FirmNo ${firm.FirmNo} (trn_dte: ${firm.LastSyncTime})`);
-  success++;
-  firmNoRows.push(firm);
-  
-  // ── SSE: Broadcast record synced ──
-  sendProgress('firms', {
-    current: firmIndex,
-    total: distinctFirmNos.length,
-    percent: progressPercent,
-    message: `✓ Synced FirmNo ${firm.FirmNo}`,
-    recordsSynced: success,
-    isLatest: isLatestRow
-  });
-}
+          if (wr.ok) {
+            console.log(`  ✅ Synced FirmNo ${firm.FirmNo} (trn_dte: ${firm.LastSyncTime})`);
+            success++;
+            firmNoRows.push(firm);
 
-           else {
+            // ── SSE: Broadcast record synced ──
+            sendProgress('firms', {
+              current: firmIndex,
+              total: distinctFirmNos.length,
+              percent: progressPercent,
+              message: `✓ Synced FirmNo ${firm.FirmNo}`,
+              recordsSynced: success,
+              isLatest: isLatestRow
+            });
+          }
+
+          else {
             const e = await wr.text();
             console.error(`  ❌ Failed FirmNo ${firm.FirmNo}: ${wr.status} - ${e}`);
             await logSyncError('Firms', firm.FirmNo, `HTTP ${wr.status}: ${e}`, bubbleBase, 'API', wr.status);
-            errors++; 
+            errors++;
             firmNoFailed = true;
             if (!failedIds.includes(firm.FirmNo)) failedIds.push(firm.FirmNo);
           }
         } catch (e) {
           console.error(`  ❌ Error FirmNo ${firm.FirmNo}:`, e.message);
           await logSyncError('Firms', firm.FirmNo, e.message, bubbleBase, 'Network', 0, e.stack);
-          errors++; 
+          errors++;
           firmNoFailed = true;
           if (!failedIds.includes(firm.FirmNo)) failedIds.push(firm.FirmNo);
         }
@@ -836,24 +836,24 @@ if (wr.ok) {
       if (!firmNoFailed && firmNoRows.length > 0) {
         // Add this FirmNo's rows to the global tracking
         allProcessedRows.push(...firmNoRows);
-        
+
         // Calculate the global minimum watermark across ALL processed rows
         const newWatermark = calculateGlobalMinWatermark(allProcessedRows, 'LastSyncTime', originalWatermark);
-        
+
         // Update the watermark
         await fetch(bubbleBase + 'obj/syncconfig/' + getSyncConfigIds(isProduction).firms, {
           method: "PATCH",
           headers: { Authorization: `Bearer ${bubbleToken}`, "Content-Type": "application/json" },
           body: JSON.stringify({ LastSyncTime: newWatermark }),
         });
-        
+
         console.log(`  💾 Checkpoint saved: FirmNo ${firmNo} processed → global watermark: ${newWatermark}`);
-        
+
         // ── Track GLOBAL minimum watermark (persists across flushes) ──
         if (new Date(newWatermark) < new Date(globalMinWatermark)) {
           globalMinWatermark = newWatermark;
         }
-        
+
         // ── MEMORY MANAGEMENT: Flush array if threshold exceeded ──
         if (allProcessedRows.length > MEMORY_FLUSH_THRESHOLD) {
           console.log(`\n🧹 [MEMORY] Flushing ${allProcessedRows.length} rows from memory (threshold: ${MEMORY_FLUSH_THRESHOLD})`);
@@ -871,7 +871,7 @@ if (wr.ok) {
     const dur = Date.now() - start;
     // ✅ Use globalMinWatermark which persists across memory flushes
     const finalWatermark = globalMinWatermark;
-    
+
     console.log(`\n${'='.repeat(60)}`);
     console.log(`✅ Firms sync completed!`);
     console.log(`📊 Stats: ${success} records synced from ${distinctFirmNos.length} firms`);
@@ -879,25 +879,25 @@ if (wr.ok) {
     console.log(`⏱️  Duration: ${(dur / 1000).toFixed(2)}s`);
     console.log(`🔄 Final watermark: ${finalWatermark} (global minimum across all processed rows)`);
     console.log(`${'='.repeat(60)}\n`);
-    
-await logSyncRun('Firms', success, errors, dur, errors === 0 ? 'success' : 'partial', failedIds.join(', '), trigger, bubbleBase);
-await logSyncPerformance('Firms', dur, success, errors === 0 ? 'success' : 'partial', bubbleBase);
 
-// ── Unregister sync ──
-unregisterSync(syncId);
+    await logSyncRun('Firms', success, errors, dur, errors === 0 ? 'success' : 'partial', failedIds.join(', '), trigger, bubbleBase);
+    await logSyncPerformance('Firms', dur, success, errors === 0 ? 'success' : 'partial', bubbleBase);
 
-// ── SSE: Broadcast sync completed ──
-sendProgress('firms', {
-  current: distinctFirmNos.length,
-  total: distinctFirmNos.length,
-  percent: 100,
-  message: `✅ Sync completed! ${success} records synced`,
-  status: 'completed',
-  recordsSynced: success,
-  errors: errors
-});
+    // ── Unregister sync ──
+    unregisterSync(syncId);
 
-return { success: errors === 0, synced: success, errors, entities: distinctFirmNos.length, totalRows, failedIds };
+    // ── SSE: Broadcast sync completed ──
+    sendProgress('firms', {
+      current: distinctFirmNos.length,
+      total: distinctFirmNos.length,
+      percent: 100,
+      message: `✅ Sync completed! ${success} records synced`,
+      status: 'completed',
+      recordsSynced: success,
+      errors: errors
+    });
+
+    return { success: errors === 0, synced: success, errors, entities: distinctFirmNos.length, totalRows, failedIds };
 
   } catch (err) {
     // Unregister sync on error
@@ -1038,7 +1038,7 @@ async function doSyncProductionFirms(topLimit = 5, trigger = 'manual', bubbleBas
 
       recordIndex++;
       const progressPercent = Math.round((recordIndex / records.length) * 100);
-      
+
       sendProgress('firms', {
         current: recordIndex,
         total: records.length,
@@ -1052,38 +1052,38 @@ async function doSyncProductionFirms(topLimit = 5, trigger = 'manual', bubbleBas
 
       try {
         const payload = {
-          firm_number:             rec.FirmNo !== null ? String(rec.FirmNo) : null,
-          firm_name:               rec.FirmName || null,
-          firm_name_caps:          rec.FirmNameCaps || null,
-          firm_type:               null,
-          discriminator:           rec.Discriminator || null,
-          id:                      rec.ID !== null ? String(rec.ID) : null,
-          email_1:                 rec.Email1 || null,
-          fax_number:              rec.FaxNumber || null,
-          mobile_number_1:         rec.MobileNumber1 || null,
-          postal_address:          null,
-          physical_address:        null,
-          audited_separately:      rec.AuditedSeparately !== null ? String(rec.AuditedSeparately) : "0",
-          auditor_id:              "0",
-          financial_year_end:      rec.FinancialYearEnd || null,
-          firm_accounting_status:  null,
+          firm_number: rec.FirmNo !== null ? String(rec.FirmNo) : null,
+          firm_name: rec.FirmName || null,
+          firm_name_caps: rec.FirmNameCaps || null,
+          firm_type: null,
+          discriminator: rec.Discriminator || null,
+          id: rec.ID !== null ? String(rec.ID) : null,
+          email_1: rec.Email1 || null,
+          fax_number: rec.FaxNumber || null,
+          mobile_number_1: rec.MobileNumber1 || null,
+          postal_address: null,
+          physical_address: null,
+          audited_separately: rec.AuditedSeparately !== null ? String(rec.AuditedSeparately) : "0",
+          auditor_id: "0",
+          financial_year_end: rec.FinancialYearEnd || null,
+          firm_accounting_status: null,
           senior_partner_director: "0",
-          docex_number:            null,
-          ffc_firm_number:         rec.FFCFirmNumber !== null ? String(rec.FFCFirmNumber) : null,
-          ls_firm_number:          rec.LSFirmNumber !== null ? String(rec.LSFirmNumber) : null,
-          province:                null,
-          status:                  rec.InactiveFlag === true ? "no" : "yes",
-          red_flag:                "no",
-          inactive_flag:           rec.InactiveFlag === true ? true : false,
-          inactive_reason:         rec.InactiveReason || null,
-          inactivated_timestamp:   rec.InactivatedTimestamp ? rec.InactivatedTimestamp.toISOString() : null,
-          main_branch:             rec.MainBranch !== null ? Number(rec.MainBranch) : null,
-          main_branch_firm_id:     rec.MainBranchFirmId || null,
-          date_formed:             rec.DateFormed ? rec.DateFormed.toISOString() : null,
-          firm_closure_date:       rec.InactivatedTimestamp ? rec.InactivatedTimestamp.toISOString() : null,
-          firm_closure_reason:     rec.InactiveReason || null,
-          firm_closure_comments:   null,
-          is_latest_row:           "yes",
+          docex_number: null,
+          ffc_firm_number: rec.FFCFirmNumber !== null ? String(rec.FFCFirmNumber) : null,
+          ls_firm_number: rec.LSFirmNumber !== null ? String(rec.LSFirmNumber) : null,
+          province: null,
+          status: rec.InactiveFlag === true ? "no" : "yes",
+          red_flag: "no",
+          inactive_flag: rec.InactiveFlag === true ? true : false,
+          inactive_reason: rec.InactiveReason || null,
+          inactivated_timestamp: rec.InactivatedTimestamp ? rec.InactivatedTimestamp.toISOString() : null,
+          main_branch: rec.MainBranch !== null ? Number(rec.MainBranch) : null,
+          main_branch_firm_id: rec.MainBranchFirmId || null,
+          date_formed: rec.DateFormed ? rec.DateFormed.toISOString() : null,
+          firm_closure_date: rec.InactivatedTimestamp ? rec.InactivatedTimestamp.toISOString() : null,
+          firm_closure_reason: rec.InactiveReason || null,
+          firm_closure_comments: null,
+          is_latest_row: "yes",
         };
 
         const wr = await fetchWithRetry(bubbleBase + 'wf/get_firms', {
@@ -1235,7 +1235,7 @@ async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
     // Register this sync
     const syncId = generateSyncId('banks');
     registerSync(syncId, 'banks');
-    
+
     // Reset stop flag for this entity
     stopFlags['banks'] = false;
 
@@ -1244,15 +1244,15 @@ async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
       if (shouldStopSync('banks', syncId)) {
         console.log(`\n🛑 [STOP SIGNAL] Banks sync ${syncId} stopped by user request`);
         console.log(`📊 Partial Stats: ${success} records synced from ${bankIndex}/${distinctKeys.length} bank accounts`);
-        
+
         // Unregister sync
         unregisterSync(syncId);
-        
+
         // Log partial completion
         const dur = Date.now() - start;
         await logSyncRun('Banks', success, errors, dur, 'stopped', failedIds.join(', '), trigger, bubbleBase);
         await logSyncPerformance('Banks', dur, success, 'stopped', bubbleBase);
-        
+
         // SSE: Broadcast stopped
         sendProgress('banks', {
           current: bankIndex,
@@ -1263,7 +1263,7 @@ async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
           recordsSynced: success,
           errors: errors
         });
-        
+
         return { success: false, synced: success, errors, entities: bankIndex, totalRows, stopped: true };
       }
       bankIndex++;
@@ -1271,7 +1271,7 @@ async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
       console.log(`\n${'─'.repeat(60)}`);
       console.log(`📊 Progress: ${bankIndex}/${distinctKeys.length} bank accounts (${progressPercent}%)`);
       console.log(`🔍 [SQL] Fetching rows for Account ${key.AccountNumber} / FirmNo ${key.Firmno}...`);
-      
+
       // ── SSE: Broadcast progress ──
       sendProgress('banks', {
         current: bankIndex,
@@ -1280,7 +1280,7 @@ async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
         message: `Processing Account ${key.AccountNumber}...`,
         entity: `${key.AccountNumber}/${key.Firmno}`
       });
-      
+
       const step2 = pool.request();
       step2.input("accountNumber", sql.NVarChar, key.AccountNumber);
       step2.input("firmNo", sql.Int, key.Firmno);
@@ -1306,24 +1306,24 @@ async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
         await applyRateLimit('banks', totalRows);
         try {
           const payload = {
-            que_idn:            bank.que_idn !== null ? Number(bank.que_idn) : null,
-            firm_id:            bank.ID !== null ? Number(bank.ID) : null,
-            firm_number:        bank.Firmno !== null ? Number(bank.Firmno) : null,
-            bank_code:          bank.BankCode !== null ? Number(bank.BankCode) : null,
-            bank_name:          bank.Bank_Name !== null ? String(bank.Bank_Name) : null,
-            branch_name:        bank.Branch !== null ? String(bank.Branch) : null,
-            branch_code:        bank.BranchCode !== null ? String(bank.BranchCode) : null,
-            account_number:     bank.AccountNumber !== null ? String(bank.AccountNumber) : null,
-            closure_comments:   bank.BankAddress !== null ? String(bank.BankAddress) : null,
+            que_idn: bank.que_idn !== null ? Number(bank.que_idn) : null,
+            firm_id: bank.ID !== null ? Number(bank.ID) : null,
+            firm_number: bank.Firmno !== null ? Number(bank.Firmno) : null,
+            bank_code: bank.BankCode !== null ? Number(bank.BankCode) : null,
+            bank_name: bank.Bank_Name !== null ? String(bank.Bank_Name) : null,
+            branch_name: bank.Branch !== null ? String(bank.Branch) : null,
+            branch_code: bank.BranchCode !== null ? String(bank.BranchCode) : null,
+            account_number: bank.AccountNumber !== null ? String(bank.AccountNumber) : null,
+            closure_comments: bank.BankAddress !== null ? String(bank.BankAddress) : null,
             trust_account_type: bank.TrustBanlAcc !== null ? String(bank.TrustBanlAcc) : null,
-            amts:               bank.AMTS === "1" ? true : false,
-            discriminator:      bank.Discriminator !== null ? String(bank.Discriminator) : null,
-            date_opened:        bank.Daterec || null,
-            last_updated:       bank.DateUpd || null,
-            created_timestamp:  bank.DateStamp || null,
-            inactive_flag:      bank.acv_ind === true ? "no" : "yes",
-            transaction_date:   bank.trn_dte || null,
-            external_id:        bank.ExternalID || null,
+            amts: bank.AMTS === "1" ? true : false,
+            discriminator: bank.Discriminator !== null ? String(bank.Discriminator) : null,
+            date_opened: bank.Daterec || null,
+            last_updated: bank.DateUpd || null,
+            created_timestamp: bank.DateStamp || null,
+            inactive_flag: bank.acv_ind === true ? "no" : "yes",
+            transaction_date: bank.trn_dte || null,
+            external_id: bank.ExternalID || null,
           };
           const wr = await fetchWithRetry(bubbleBase + 'wf/get_banks', {
             method: "POST",
@@ -1334,7 +1334,7 @@ async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
             console.log(`  ✅ Synced bank ${key.AccountNumber} / FirmNo ${key.Firmno} (trn_dte: ${bank.trn_dte})`);
             success++;
             bankKeyRows.push(bank);
-            
+
             // ── SSE: Broadcast record synced ──
             sendProgress('banks', {
               current: bankIndex,
@@ -1344,18 +1344,18 @@ async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
               recordsSynced: success
             });
           }
- else {
+          else {
             const e = await wr.text();
             console.error(`  ❌ Failed bank ${key.AccountNumber}: ${wr.status} - ${e}`);
             await logSyncError('Banks', `${key.AccountNumber}/${key.Firmno}`, `HTTP ${wr.status}: ${e}`, bubbleBase, 'API', wr.status);
-            errors++; 
+            errors++;
             bankKeyFailed = true;
             if (!failedIds.includes(`${key.AccountNumber}/${key.Firmno}`)) failedIds.push(`${key.AccountNumber}/${key.Firmno}`);
           }
         } catch (e) {
           console.error(`  ❌ Error bank ${key.AccountNumber}:`, e.message);
           await logSyncError('Banks', `${key.AccountNumber}/${key.Firmno}`, e.message, bubbleBase, 'Network', 0, e.stack);
-          errors++; 
+          errors++;
           bankKeyFailed = true;
           if (!failedIds.includes(`${key.AccountNumber}/${key.Firmno}`)) failedIds.push(`${key.AccountNumber}/${key.Firmno}`);
         }
@@ -1366,24 +1366,24 @@ async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
       if (!bankKeyFailed && bankKeyRows.length > 0) {
         // Add this bank account's rows to the global tracking
         allProcessedRows.push(...bankKeyRows);
-        
+
         // Calculate the global minimum watermark across ALL processed rows
         const newWatermark = calculateGlobalMinWatermark(allProcessedRows, 'trn_dte', originalWatermark);
-        
+
         // Update the watermark
         await fetch(bubbleBase + 'obj/syncconfig/' + getSyncConfigIds(isProduction).banks, {
           method: "PATCH",
           headers: { Authorization: `Bearer ${bubbleToken}`, "Content-Type": "application/json" },
           body: JSON.stringify({ LastSyncTime: newWatermark }),
         });
-        
+
         console.log(`  💾 Checkpoint saved: Account ${key.AccountNumber}/${key.Firmno} processed → global watermark: ${newWatermark}`);
-        
+
         // ── Track GLOBAL minimum watermark (persists across flushes) ──
         if (new Date(newWatermark) < new Date(globalMinWatermark)) {
           globalMinWatermark = newWatermark;
         }
-        
+
         // ── MEMORY MANAGEMENT: Flush array if threshold exceeded ──
         if (allProcessedRows.length > MEMORY_FLUSH_THRESHOLD) {
           console.log(`\n🧹 [MEMORY] Flushing ${allProcessedRows.length} rows from memory (threshold: ${MEMORY_FLUSH_THRESHOLD})`);
@@ -1401,7 +1401,7 @@ async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
     const dur = Date.now() - start;
     // ✅ Use globalMinWatermark which persists across memory flushes
     const finalWatermark = globalMinWatermark;
-    
+
     console.log(`\n${'='.repeat(60)}`);
     console.log(`✅ Banks sync completed!`);
     console.log(`📊 Stats: ${success} records synced from ${distinctKeys.length} bank accounts`);
@@ -1409,7 +1409,7 @@ async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
     console.log(`⏱️  Duration: ${(dur / 1000).toFixed(2)}s`);
     console.log(`🔄 Final watermark: ${finalWatermark} (global minimum across all processed rows)`);
     console.log(`${'='.repeat(60)}\n`);
-    
+
     await logSyncRun('Banks', success, errors, dur, errors === 0 ? 'success' : 'partial', failedIds.join(', '), trigger, bubbleBase);
     await logSyncPerformance('Banks', dur, success, errors === 0 ? 'success' : 'partial', bubbleBase);
 
@@ -1492,12 +1492,12 @@ async function doSyncProductionBanks(topLimit = 5, trigger = 'manual', bubbleBas
           conditions.push(`(AccountNumber = '${acc}')`);
         }
       });
-      
+
       if (conditions.length === 0) {
         console.warn(`[doSyncProductionBanks] No valid conditions from customIds`);
         return { success: true, message: 'No valid custom IDs', synced: 0 };
       }
-      
+
       const step1 = pool.request();
       const query = `
         SELECT 
@@ -1568,7 +1568,7 @@ async function doSyncProductionBanks(topLimit = 5, trigger = 'manual', bubbleBas
 
       recordIndex++;
       const progressPercent = Math.round((recordIndex / records.length) * 100);
-      
+
       sendProgress('banks', {
         current: recordIndex,
         total: records.length,
@@ -1582,24 +1582,24 @@ async function doSyncProductionBanks(topLimit = 5, trigger = 'manual', bubbleBas
 
       try {
         const payload = {
-          que_idn:            rec.Id !== null ? Number(rec.Id) : null,
-          firm_id:            rec.Id !== null ? Number(rec.Id) : null,
-          firm_number:        rec.Firmno !== null ? Number(rec.Firmno) : null,
-          bank_code:          rec.BankCode !== null ? Number(rec.BankCode) : null,
-          bank_name:          rec.Bank_Name || null,
-          branch_name:        rec.Branch || null,
-          branch_code:        null,
-          account_number:     rec.AccountNumber !== null ? String(rec.AccountNumber) : null,
-          closure_comments:   rec.DateClosed ? String(rec.DateClosed) : null,
+          que_idn: rec.Id !== null ? Number(rec.Id) : null,
+          firm_id: rec.Id !== null ? Number(rec.Id) : null,
+          firm_number: rec.Firmno !== null ? Number(rec.Firmno) : null,
+          bank_code: rec.BankCode !== null ? Number(rec.BankCode) : null,
+          bank_name: rec.Bank_Name || null,
+          branch_name: rec.Branch || null,
+          branch_code: null,
+          account_number: rec.AccountNumber !== null ? String(rec.AccountNumber) : null,
+          closure_comments: rec.DateClosed ? String(rec.DateClosed) : null,
           trust_account_type: rec.AccountTypeLkp !== null ? String(rec.AccountTypeLkp) : null,
-          amts:               false,
-          discriminator:      null,
-          date_opened:        rec.Daterec || null,
-          last_updated:       rec.trn_dte || null,
-          created_timestamp:  rec.Daterec || null,
-          inactive_flag:      rec.InactiveFlag === 0 ? "no" : "yes",
-          transaction_date:   rec.trn_dte ? rec.trn_dte.toISOString() : null,
-          external_id:        rec.Id !== null ? String(rec.Id) : null,
+          amts: false,
+          discriminator: null,
+          date_opened: rec.Daterec || null,
+          last_updated: rec.trn_dte || null,
+          created_timestamp: rec.Daterec || null,
+          inactive_flag: rec.InactiveFlag === 0 ? "no" : "yes",
+          transaction_date: rec.trn_dte ? rec.trn_dte.toISOString() : null,
+          external_id: rec.Id !== null ? String(rec.Id) : null,
         };
 
         const wr = await fetchWithRetry(bubbleBase + 'wf/get_banks', {
@@ -1745,7 +1745,7 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
     // Register this sync
     const syncId = generateSyncId('practitioners');
     registerSync(syncId, 'practitioners');
-    
+
     // Reset stop flag for this entity
     stopFlags['practitioners'] = false;
 
@@ -1754,15 +1754,15 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
       if (shouldStopSync('practitioners', syncId)) {
         console.log(`\n🛑 [STOP SIGNAL] Practitioners sync ${syncId} stopped by user request`);
         console.log(`📊 Partial Stats: ${success} records synced from ${practitionerIndex}/${distinctMemNos.length} practitioners`);
-        
+
         // Unregister sync
         unregisterSync(syncId);
-        
+
         // Log partial completion
         const dur = Date.now() - start;
         await logSyncRun('Practitioners', success, errors, dur, 'stopped', failedIds.join(', '), trigger, bubbleBase);
         await logSyncPerformance('Practitioners', dur, success, 'stopped', bubbleBase);
-        
+
         // SSE: Broadcast stopped
         sendProgress('practitioners', {
           current: practitionerIndex,
@@ -1773,16 +1773,16 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
           recordsSynced: success,
           errors: errors
         });
-        
+
         return { success: false, synced: success, errors, entities: practitionerIndex, totalRows, stopped: true };
       }
-      
+
       practitionerIndex++;
       const progressPercent = Math.round((practitionerIndex / distinctMemNos.length) * 100);
       console.log(`\n${'─'.repeat(60)}`);
       console.log(`📊 Progress: ${practitionerIndex}/${distinctMemNos.length} practitioners (${progressPercent}%)`);
       console.log(`🔍 [SQL] Fetching rows for MemNo ${memNo}...`);
-      
+
       // ── SSE: Broadcast progress ──
       sendProgress('practitioners', {
         current: practitionerIndex,
@@ -1791,7 +1791,7 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
         message: `Processing MemNo ${memNo}...`,
         entity: memNo
       });
-      
+
       const step2 = pool.request();
       step2.input("memNo", sql.Int, memNo);
       step2.input("devRun", sql.Int, devRun);
@@ -1814,7 +1814,7 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
       `);
       let rows = rowsResult.recordset;
       console.log(`  ✅ [SQL] Got ${rows.length} row(s)`);
-      
+
       // ── VALIDATION: Filter out any rows that don't match expected MemNo ──
       const uniqueMemNos = [...new Set(rows.map(r => r.MemNo))];
       if (uniqueMemNos.length > 1 || (uniqueMemNos.length === 1 && String(uniqueMemNos[0]) !== String(memNo))) {
@@ -1823,7 +1823,7 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
         rows = rows.filter(r => String(r.MemNo) === String(memNo));
         console.warn(`  ⚠️  Filtered ${originalCount - rows.length} mismatched rows. Remaining: ${rows.length}`);
       }
-      
+
       if (rows.length === 0) {
         console.log(`  ℹ️  No valid rows for MemNo ${memNo} after filtering - skipping`);
         continue;
@@ -1844,41 +1844,41 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
         console.log(`  [MemNo ${p.MemNo}] is_latest_row: ${isLatestRow ? "true" : "false"} | trn_dte: ${p.TransactionDate}`);
         try {
           const payload = {
-            id:                    p.ID !== null ? String(p.ID) : null,
-            mem_no:                p.MemNo !== null ? String(p.MemNo) : null,
-            surname:               p.Surname || null,
-            first_name:            p.FirstName || null,
-            initials:              p.Initials || null,
-            title:                 p.Title || null,
-            gender:                p.Gender || null,
-            date_of_birth:         p.DateOfBirth || null,
-            cell_number:           p.CellNumber || null,
-            fax_number:            p.FaxNumber || null,
-            email:                 p.Email || null,
-            id_number:             p.IDNumber || null,
-            discriminator:         p.Discriminator || null,
-            pmt_status:            p.PmtStatus !== null ? String(p.PmtStatus) : null,
-            province:              p.Province || null,
-            red_flag:              p.RedFlag || null,
-            attorney:              p.Attorney !== null ? String(p.Attorney) : null,
-            attorney_date:         p.AttorneyDate || null,
-            notary:                p.Notary !== null ? String(p.Notary) : null,
-            notary_date:           p.NotaryDate || null,
-            conveyancer:           p.Conveyancer !== null ? String(p.Conveyancer) : null,
-            conveyancer_date:      p.ConveyancerDate || null,
+            id: p.ID !== null ? String(p.ID) : null,
+            mem_no: p.MemNo !== null ? String(p.MemNo) : null,
+            surname: p.Surname || null,
+            first_name: p.FirstName || null,
+            initials: p.Initials || null,
+            title: p.Title || null,
+            gender: p.Gender || null,
+            date_of_birth: p.DateOfBirth || null,
+            cell_number: p.CellNumber || null,
+            fax_number: p.FaxNumber || null,
+            email: p.Email || null,
+            id_number: p.IDNumber || null,
+            discriminator: p.Discriminator || null,
+            pmt_status: p.PmtStatus !== null ? String(p.PmtStatus) : null,
+            province: p.Province || null,
+            red_flag: p.RedFlag || null,
+            attorney: p.Attorney !== null ? String(p.Attorney) : null,
+            attorney_date: p.AttorneyDate || null,
+            notary: p.Notary !== null ? String(p.Notary) : null,
+            notary_date: p.NotaryDate || null,
+            conveyancer: p.Conveyancer !== null ? String(p.Conveyancer) : null,
+            conveyancer_date: p.ConveyancerDate || null,
             course_completed_date: p.CourseCompletedDate || null,
-            course_proof_date:     p.CourseProofDate || null,
-            date_inactive:         p.DateInactive || null,
-            inactive_flag:         p.InactiveFlag === true ? "no" : "yes",
-            physical_address:      p.PhysicalAddress || null,
-            postal_address:        p.PostalAddress || null,
-            username:              p.Username || null,
-            role:                  p.Activity || null,
-            advocate:              null,
-            advocate_date:         null,
-            ffc_advocate:          null,
-            transaction_date:      p.TransactionDate || null,
-            is_latest_row:         isLatestRow ? "yes" : "no",
+            course_proof_date: p.CourseProofDate || null,
+            date_inactive: p.DateInactive || null,
+            inactive_flag: p.InactiveFlag === true ? "no" : "yes",
+            physical_address: p.PhysicalAddress || null,
+            postal_address: p.PostalAddress || null,
+            username: p.Username || null,
+            role: p.Activity || null,
+            advocate: null,
+            advocate_date: null,
+            ffc_advocate: null,
+            transaction_date: p.TransactionDate || null,
+            is_latest_row: isLatestRow ? "yes" : "no",
           };
           const wr = await fetchWithRetry(bubbleBase + 'wf/get_practitioners', {
             method: "POST",
@@ -1889,7 +1889,7 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
             console.log(`  ✅ Synced MemNo ${p.MemNo} (trn_dte: ${p.TransactionDate})`);
             success++;
             memNoRows.push(p);
-            
+
             // ── SSE: Broadcast record synced ──
             sendProgress('practitioners', {
               current: practitionerIndex,
@@ -1900,18 +1900,18 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
               isLatest: isLatestRow
             });
           }
- else {
+          else {
             const e = await wr.text();
             console.error(`  ❌ Failed MemNo ${p.MemNo}: ${wr.status} - ${e}`);
             await logSyncError('Practitioners', p.MemNo, `HTTP ${wr.status}: ${e}`, bubbleBase, 'API', wr.status);
-            errors++; 
+            errors++;
             memNoFailed = true;
             if (!failedIds.includes(p.MemNo)) failedIds.push(p.MemNo);
           }
         } catch (e) {
           console.error(`  ❌ Error MemNo ${p.MemNo}:`, e.message);
           await logSyncError('Practitioners', p.MemNo, e.message, bubbleBase, 'Network', 0, e.stack);
-          errors++; 
+          errors++;
           memNoFailed = true;
           if (!failedIds.includes(p.MemNo)) failedIds.push(p.MemNo);
         }
@@ -1922,24 +1922,24 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
       if (!memNoFailed && memNoRows.length > 0) {
         // Add this MemNo's rows to the global tracking
         allProcessedRows.push(...memNoRows);
-        
+
         // Calculate the global minimum watermark across ALL processed rows
         const newWatermark = calculateGlobalMinWatermark(allProcessedRows, 'TransactionDate', originalWatermark);
-        
+
         // Update the watermark
         await fetch(bubbleBase + 'obj/syncconfig/' + getSyncConfigIds(isProduction).practitioners, {
           method: "PATCH",
           headers: { Authorization: `Bearer ${bubbleToken}`, "Content-Type": "application/json" },
           body: JSON.stringify({ LastSyncTime: newWatermark }),
         });
-        
+
         console.log(`  💾 Checkpoint saved: MemNo ${memNo} processed → global watermark: ${newWatermark}`);
-        
+
         // ── Track GLOBAL minimum watermark (persists across flushes) ──
         if (new Date(newWatermark) < new Date(globalMinWatermark)) {
           globalMinWatermark = newWatermark;
         }
-        
+
         // ── MEMORY MANAGEMENT: Flush array if threshold exceeded ──
         if (allProcessedRows.length > MEMORY_FLUSH_THRESHOLD) {
           console.log(`\n🧹 [MEMORY] Flushing ${allProcessedRows.length} rows from memory (threshold: ${MEMORY_FLUSH_THRESHOLD})`);
@@ -1957,7 +1957,7 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
     const dur = Date.now() - start;
     // ✅ Use globalMinWatermark which persists across memory flushes
     const finalWatermark = globalMinWatermark;
-    
+
     console.log(`\n${'='.repeat(60)}`);
     console.log(`✅ Practitioners sync completed!`);
     console.log(`📊 Stats: ${success} records synced from ${distinctMemNos.length} practitioners`);
@@ -1965,7 +1965,7 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
     console.log(`⏱️  Duration: ${(dur / 1000).toFixed(2)}s`);
     console.log(`🔄 Final watermark: ${finalWatermark} (global minimum across all processed rows)`);
     console.log(`${'='.repeat(60)}\n`);
-    
+
     await logSyncRun('Practitioners', success, errors, dur, errors === 0 ? 'success' : 'partial', failedIds.join(', '), trigger, bubbleBase);
     await logSyncPerformance('Practitioners', dur, success, errors === 0 ? 'success' : 'partial', bubbleBase);
 
@@ -2127,7 +2127,7 @@ async function doSyncProductionPractitioners(topLimit = 5, trigger = 'manual', b
 
       recordIndex++;
       const progressPercent = Math.round((recordIndex / records.length) * 100);
-      
+
       sendProgress('practitioners', {
         current: recordIndex,
         total: records.length,
@@ -2141,23 +2141,23 @@ async function doSyncProductionPractitioners(topLimit = 5, trigger = 'manual', b
 
       try {
         const payload = {
-          id:                  rec.ID !== null ? String(rec.ID) : null,
-          mem_no:              rec.MemNo !== null ? String(rec.MemNo) : null,
+          id: rec.ID !== null ? String(rec.ID) : null,
+          mem_no: rec.MemNo !== null ? String(rec.MemNo) : null,
           practitioner_number: rec.MemNo !== null ? String(rec.MemNo) : null,
-          surname:             rec.Surname || null,
-          first_name:          rec.FirstName || null,
-          initials:            rec.Initials || null,
-          title:               rec.Title !== null ? String(rec.Title) : null,
-          gender:              rec.Gender !== null ? String(rec.Gender) : null,
-          date_of_birth:       rec.DateOfBirth ? rec.DateOfBirth.toISOString() : null,
-          cell_number:         rec.CellNumber || null,
-          fax_number:          rec.FaxNumber || null,
-          email:               rec.Email || null,
-          id_number:           rec.IDNumber || null,
-          discriminator:       rec.Discriminator || null,
-          inactive_flag:       rec.InactiveFlag === true || rec.InactiveFlag === 1 ? "yes" : "no",
-          transaction_date:    rec.TransactionDate ? rec.TransactionDate.toISOString() : null,
-          username:            rec.MemNo !== null ? String(rec.MemNo) : null,
+          surname: rec.Surname || null,
+          first_name: rec.FirstName || null,
+          initials: rec.Initials || null,
+          title: rec.Title !== null ? String(rec.Title) : null,
+          gender: rec.Gender !== null ? String(rec.Gender) : null,
+          date_of_birth: rec.DateOfBirth ? rec.DateOfBirth.toISOString() : null,
+          cell_number: rec.CellNumber || null,
+          fax_number: rec.FaxNumber || null,
+          email: rec.Email || null,
+          id_number: rec.IDNumber || null,
+          discriminator: rec.Discriminator || null,
+          inactive_flag: rec.InactiveFlag === true || rec.InactiveFlag === 1 ? "yes" : "no",
+          transaction_date: rec.TransactionDate ? rec.TransactionDate.toISOString() : null,
+          username: rec.MemNo !== null ? String(rec.MemNo) : null,
         };
 
         const wr = await fetchWithRetry(bubbleBase + 'wf/get_practitioners', {
@@ -2305,7 +2305,7 @@ async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBa
     // Register this sync
     const syncId = generateSyncId('practitionersadm');
     registerSync(syncId, 'practitionersadm');
-    
+
     // Reset stop flag for this entity
     stopFlags['practitionersadm'] = false;
 
@@ -2314,15 +2314,15 @@ async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBa
       if (shouldStopSync('practitionersadm', syncId)) {
         console.log(`\n🛑 [STOP SIGNAL] PractitionersAdm sync ${syncId} stopped by user request`);
         console.log(`📊 Partial Stats: ${success} records synced from ${admIndex}/${distinctMemnos.length} admin records`);
-        
+
         // Unregister sync
         unregisterSync(syncId);
-        
+
         // Log partial completion
         const dur = Date.now() - start;
         await logSyncRun('PractitionersAdm', success, errors, dur, 'stopped', failedMemos.join(', '), trigger, bubbleBase);
         await logSyncPerformance('PractitionersAdm', dur, success, 'stopped', bubbleBase);
-        
+
         // SSE: Broadcast stopped
         sendProgress('practitionersadm', {
           current: admIndex,
@@ -2333,16 +2333,16 @@ async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBa
           recordsSynced: success,
           errors: errors
         });
-        
+
         return { success: false, synced: success, errors, entities: admIndex, totalRows, stopped: true };
       }
-      
+
       admIndex++;
       const progressPercent = Math.round((admIndex / distinctMemnos.length) * 100);
       console.log(`\n${'─'.repeat(60)}`);
       console.log(`📊 Progress: ${admIndex}/${distinctMemnos.length} admin records (${progressPercent}%)`);
       console.log(`🔍 [SQL] Fetching rows for memno ${memno}...`);
-      
+
       // ── SSE: Broadcast progress ──
       sendProgress('practitionersadm', {
         current: admIndex,
@@ -2351,7 +2351,7 @@ async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBa
         message: `Processing memno ${memno}...`,
         entity: memno
       });
-      
+
       const step2 = pool.request();
       step2.input("memno", sql.Int, memno);
       step2.input("devRun", sql.Int, devRun);
@@ -2374,15 +2374,15 @@ async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBa
         try {
           const payload = {
             practitioner_number: rec.memno !== null ? String(rec.memno) : null,
-            attorney:            rec.attorney !== null ? String(rec.attorney) : null,
-            attorney_date:       rec.attorney_dte || null,
-            conveyancer:         rec.conveyancer !== null ? String(rec.conveyancer) : null,
-            conveyancer_date:    rec.conveyancer_dte || null,
-            notary:              rec.notary !== null ? String(rec.notary) : null,
-            notary_date:         rec.notary_dte || null,
-            advocate:            rec.advocate !== null ? String(rec.advocate) : null,
-            advocate_date:       rec.advocate_dte || null,
-            ffc_advocate:        rec.ffc_advocate !== null ? String(rec.ffc_advocate) : null,
+            attorney: rec.attorney !== null ? String(rec.attorney) : null,
+            attorney_date: rec.attorney_dte || null,
+            conveyancer: rec.conveyancer !== null ? String(rec.conveyancer) : null,
+            conveyancer_date: rec.conveyancer_dte || null,
+            notary: rec.notary !== null ? String(rec.notary) : null,
+            notary_date: rec.notary_dte || null,
+            advocate: rec.advocate !== null ? String(rec.advocate) : null,
+            advocate_date: rec.advocate_dte || null,
+            ffc_advocate: rec.ffc_advocate !== null ? String(rec.ffc_advocate) : null,
           };
           const wr = await fetchWithRetry(bubbleBase + 'wf/get_practitionersadm', {
             method: "POST",
@@ -2393,7 +2393,7 @@ async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBa
             console.log(`  ✅ Synced admin memno ${rec.memno} (trn_dte: ${rec.trn_dte})`);
             success++;
             memnoRows.push(rec);
-            
+
             // ── SSE: Broadcast record synced ──
             sendProgress('practitionersadm', {
               current: admIndex,
@@ -2403,18 +2403,18 @@ async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBa
               recordsSynced: success
             });
           }
- else {
+          else {
             const e = await wr.text();
             console.error(`  ❌ Failed admin memno ${rec.memno}: ${wr.status} - ${e}`);
             await logSyncError('PractitionersAdm', rec.memno, `HTTP ${wr.status}: ${e}`, bubbleBase, 'API', wr.status);
-            errors++; 
+            errors++;
             memnoFailed = true;
             if (!failedMemos.includes(rec.memno)) failedMemos.push(rec.memno);
           }
         } catch (e) {
           console.error(`  ❌ Error admin memno ${rec.memno}:`, e.message);
           await logSyncError('PractitionersAdm', rec.memno, e.message, bubbleBase, 'Network', 0, e.stack);
-          errors++; 
+          errors++;
           memnoFailed = true;
           if (!failedMemos.includes(rec.memno)) failedMemos.push(rec.memno);
         }
@@ -2425,24 +2425,24 @@ async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBa
       if (!memnoFailed && memnoRows.length > 0) {
         // Add this memno's rows to the global tracking
         allProcessedRows.push(...memnoRows);
-        
+
         // Calculate the global minimum watermark across ALL processed rows
         const newWatermark = calculateGlobalMinWatermark(allProcessedRows, 'trn_dte', originalWatermark);
-        
+
         // Update the watermark
         await fetch(bubbleBase + 'obj/syncconfig/' + getSyncConfigIds(isProduction).practitionersadm, {
           method: "PATCH",
           headers: { Authorization: `Bearer ${bubbleToken}`, "Content-Type": "application/json" },
           body: JSON.stringify({ LastSyncTime: newWatermark }),
         });
-        
+
         console.log(`  💾 Checkpoint saved: memno ${memno} processed → global watermark: ${newWatermark}`);
-        
+
         // ── Track GLOBAL minimum watermark (persists across flushes) ──
         if (new Date(newWatermark) < new Date(globalMinWatermark)) {
           globalMinWatermark = newWatermark;
         }
-        
+
         // ── MEMORY MANAGEMENT: Flush array if threshold exceeded ──
         if (allProcessedRows.length > MEMORY_FLUSH_THRESHOLD) {
           console.log(`\n🧹 [MEMORY] Flushing ${allProcessedRows.length} rows from memory (threshold: ${MEMORY_FLUSH_THRESHOLD})`);
@@ -2460,7 +2460,7 @@ async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBa
     const dur = Date.now() - start;
     // ✅ Use globalMinWatermark which persists across memory flushes
     const finalWatermark = globalMinWatermark;
-    
+
     console.log(`\n${'='.repeat(60)}`);
     console.log(`✅ PractitionersAdm sync completed!`);
     console.log(`📊 Stats: ${success} records synced from ${distinctMemnos.length} practitioners`);
@@ -2468,7 +2468,7 @@ async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBa
     console.log(`⏱️  Duration: ${(dur / 1000).toFixed(2)}s`);
     console.log(`🔄 Final watermark: ${finalWatermark} (global minimum across all processed rows)`);
     console.log(`${'='.repeat(60)}\n`);
-    
+
     await logSyncRun('PractitionersAdm', success, errors, dur, errors === 0 ? 'success' : 'partial', failedMemos.join(', '), trigger, bubbleBase);
     await logSyncPerformance('PractitionersAdm', dur, success, errors === 0 ? 'success' : 'partial', bubbleBase);
 
@@ -2618,7 +2618,7 @@ async function doSyncProductionPractitionersAdm(topLimit = 5, trigger = 'manual'
 
       recordIndex++;
       const progressPercent = Math.round((recordIndex / records.length) * 100);
-      
+
       sendProgress('practitionersadm', {
         current: recordIndex,
         total: records.length,
@@ -2632,17 +2632,17 @@ async function doSyncProductionPractitionersAdm(topLimit = 5, trigger = 'manual'
 
       try {
         const payload = {
-          attorney:             rec.attorney !== null ? String(rec.attorney) : null,
-          attorney_date:        rec.attorney_dte ? rec.attorney_dte.toISOString() : null,
-          conveyancer:          rec.conveyancer !== null ? String(rec.conveyancer) : null,
-          conveyancer_date:     rec.conveyancer_dte ? rec.conveyancer_dte.toISOString() : null,
-          notary:               rec.notary !== null ? String(rec.notary) : null,
-          notary_date:          rec.notary_dte ? rec.notary_dte.toISOString() : null,
-          advocate:             rec.advocate !== null ? String(rec.advocate) : null,
-          advocate_date:        rec.advocate_dte ? rec.advocate_dte.toISOString() : null,
-          ffc_advocate:         rec.ffc_advocate !== null ? String(rec.ffc_advocate) : null,
-          practitioner_number:  rec.memno !== null ? String(rec.memno) : null,
-          transaction_date:     rec.trn_dte ? rec.trn_dte.toISOString() : null,
+          attorney: rec.attorney !== null ? String(rec.attorney) : null,
+          attorney_date: rec.attorney_dte ? rec.attorney_dte.toISOString() : null,
+          conveyancer: rec.conveyancer !== null ? String(rec.conveyancer) : null,
+          conveyancer_date: rec.conveyancer_dte ? rec.conveyancer_dte.toISOString() : null,
+          notary: rec.notary !== null ? String(rec.notary) : null,
+          notary_date: rec.notary_dte ? rec.notary_dte.toISOString() : null,
+          advocate: rec.advocate !== null ? String(rec.advocate) : null,
+          advocate_date: rec.advocate_dte ? rec.advocate_dte.toISOString() : null,
+          ffc_advocate: rec.ffc_advocate !== null ? String(rec.ffc_advocate) : null,
+          practitioner_number: rec.memno !== null ? String(rec.memno) : null,
+          transaction_date: rec.trn_dte ? rec.trn_dte.toISOString() : null,
         };
 
         const wr = await fetchWithRetry(bubbleBase + 'wf/get_practitionersadm', {
@@ -2792,7 +2792,7 @@ async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleB
     // Register this sync
     const syncId = generateSyncId('employmenthistory');
     registerSync(syncId, 'employmenthistory');
-    
+
     // Reset stop flag for this entity
     stopFlags['employmenthistory'] = false;
 
@@ -2801,15 +2801,15 @@ async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleB
       if (shouldStopSync('employmenthistory', syncId)) {
         console.log(`\n🛑 [STOP SIGNAL] EmploymentHistory sync ${syncId} stopped by user request`);
         console.log(`📊 Partial Stats: ${success} records synced from ${empIndex}/${distinctKeys.length} employment records`);
-        
+
         // Unregister sync
         unregisterSync(syncId);
-        
+
         // Log partial completion
         const dur = Date.now() - start;
         await logSyncRun('EmploymentHistory', success, errors, dur, 'stopped', failedIds.join(', '), trigger, bubbleBase);
         await logSyncPerformance('EmploymentHistory', dur, success, 'stopped', bubbleBase);
-        
+
         // SSE: Broadcast stopped
         sendProgress('employmenthistory', {
           current: empIndex,
@@ -2820,16 +2820,16 @@ async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleB
           recordsSynced: success,
           errors: errors
         });
-        
+
         return { success: false, synced: success, errors, entities: empIndex, totalRows, stopped: true };
       }
-      
+
       empIndex++;
       const progressPercent = Math.round((empIndex / distinctKeys.length) * 100);
       console.log(`\n${'─'.repeat(60)}`);
       console.log(`📊 Progress: ${empIndex}/${distinctKeys.length} employment records (${progressPercent}%)`);
       console.log(`🔍 [SQL] Fetching rows for memno ${key.memno} / firmno ${key.firmno}...`);
-      
+
       // ── SSE: Broadcast progress ──
       sendProgress('employmenthistory', {
         current: empIndex,
@@ -2838,7 +2838,7 @@ async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleB
         message: `Processing memno ${key.memno} / firmno ${key.firmno}...`,
         entity: `${key.memno}/${key.firmno}`
       });
-      
+
       const step2 = pool.request();
       step2.input('memno', sql.Int, key.memno);
       step2.input('firmno', sql.Int, key.firmno);
@@ -2889,16 +2889,16 @@ async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleB
             '93': 'SOLEPROPRIETOR'
           };
           const payload = {
-            id:                  rec.id !== null ? String(rec.id) : null,
+            id: rec.id !== null ? String(rec.id) : null,
             practitioner_number: rec.memno !== null ? String(rec.memno) : null,
-            firm_number:         rec.firmno !== null ? String(rec.firmno) : null,
-            status:              rec.status !== null ? (ROLE_MAP[String(rec.status)] || String(rec.status)) : null,
-            start_date:          rec.StartDate || null,
-            end_date:            rec.EndDate || null,
-            discriminator:       rec.Discriminator || null,
-            inactive_flag:       rec.InactiveFlag !== null ? String(rec.InactiveFlag) : null,
-            external_id:         rec.ExternalID || null,
-            last_updated:        rec.LastUpdated || null,
+            firm_number: rec.firmno !== null ? String(rec.firmno) : null,
+            status: rec.status !== null ? (ROLE_MAP[String(rec.status)] || String(rec.status)) : null,
+            start_date: rec.StartDate || null,
+            end_date: rec.EndDate || null,
+            discriminator: rec.Discriminator || null,
+            inactive_flag: rec.InactiveFlag !== null ? String(rec.InactiveFlag) : null,
+            external_id: rec.ExternalID || null,
+            last_updated: rec.LastUpdated || null,
           };
           const wr = await fetchWithRetry(bubbleBase + 'wf/get_employmenthistory', {
             method: 'POST',
@@ -2909,7 +2909,7 @@ async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleB
             console.log(`  ✅ Synced employment memno ${key.memno} / firmno ${key.firmno} (trn_dte: ${rec.LastUpdated})`);
             success++;
             empKeyRows.push(rec);
-            
+
             // ── SSE: Broadcast record synced ──
             sendProgress('employmenthistory', {
               current: empIndex,
@@ -2919,18 +2919,18 @@ async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleB
               recordsSynced: success
             });
           }
- else {
+          else {
             const e = await wr.text();
             console.error(`  ❌ Failed employment memno ${key.memno} / firmno ${key.firmno}: ${wr.status} - ${e}`);
             await logSyncError('EmploymentHistory', `${key.memno}/${key.firmno}`, `HTTP ${wr.status}: ${e}`, bubbleBase, 'API', wr.status);
-            errors++; 
+            errors++;
             empKeyFailed = true;
             if (!failedIds.includes(`${key.memno}/${key.firmno}`)) failedIds.push(`${key.memno}/${key.firmno}`);
           }
         } catch (e) {
           console.error(`  ❌ Error employment memno ${key.memno} / firmno ${key.firmno}:`, e.message);
           await logSyncError('EmploymentHistory', `${key.memno}/${key.firmno}`, e.message, bubbleBase, 'Network', 0, e.stack);
-          errors++; 
+          errors++;
           empKeyFailed = true;
           if (!failedIds.includes(`${key.memno}/${key.firmno}`)) failedIds.push(`${key.memno}/${key.firmno}`);
         }
@@ -2941,24 +2941,24 @@ async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleB
       if (!empKeyFailed && empKeyRows.length > 0) {
         // Add this employment record's rows to the global tracking
         allProcessedRows.push(...empKeyRows);
-        
+
         // Calculate the global minimum watermark across ALL processed rows
         const newWatermark = calculateGlobalMinWatermark(allProcessedRows, 'LastUpdated', originalWatermark);
-        
+
         // Update the watermark
         await fetch(bubbleBase + 'obj/syncconfig/' + getSyncConfigIds(isProduction).employmentHistory, {
           method: 'PATCH',
           headers: { Authorization: `Bearer ${bubbleToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ LastSyncTime: newWatermark }),
         });
-        
+
         console.log(`  💾 Checkpoint saved: memno ${key.memno}/firmno ${key.firmno} processed → global watermark: ${newWatermark}`);
-        
+
         // ── Track GLOBAL minimum watermark (persists across flushes) ──
         if (new Date(newWatermark) < new Date(globalMinWatermark)) {
           globalMinWatermark = newWatermark;
         }
-        
+
         // ── MEMORY MANAGEMENT: Flush array if threshold exceeded ──
         if (allProcessedRows.length > MEMORY_FLUSH_THRESHOLD) {
           console.log(`\n🧹 [MEMORY] Flushing ${allProcessedRows.length} rows from memory (threshold: ${MEMORY_FLUSH_THRESHOLD})`);
@@ -2976,7 +2976,7 @@ async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleB
     const dur = Date.now() - start;
     // ✅ Use globalMinWatermark which persists across memory flushes
     const finalWatermark = globalMinWatermark;
-    
+
     console.log(`\n${'='.repeat(60)}`);
     console.log(`✅ EmploymentHistory sync completed!`);
     console.log(`📊 Stats: ${success} records synced from ${distinctKeys.length} employment entries`);
@@ -2984,7 +2984,7 @@ async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleB
     console.log(`⏱️  Duration: ${(dur / 1000).toFixed(2)}s`);
     console.log(`🔄 Final watermark: ${finalWatermark} (global minimum across all processed rows)`);
     console.log(`${'='.repeat(60)}\n`);
-    
+
     await logSyncRun('EmploymentHistory', success, errors, dur, errors === 0 ? 'success' : 'partial', failedIds.join(', '), trigger, bubbleBase);
     await logSyncPerformance('EmploymentHistory', dur, success, errors === 0 ? 'success' : 'partial', bubbleBase);
 
@@ -3118,7 +3118,7 @@ async function doSyncProductionEmploymentHistory(topLimit = 5, trigger = 'manual
     for (const rec of records) {
       recordIndex++;
       const progressPercent = Math.round((recordIndex / records.length) * 100);
-      
+
       sendProgress('employmenthistory', {
         current: recordIndex,
         total: records.length,
@@ -3132,16 +3132,16 @@ async function doSyncProductionEmploymentHistory(topLimit = 5, trigger = 'manual
 
       try {
         const payload = {
-          id:                  rec.id !== null ? String(rec.id) : null,
+          id: rec.id !== null ? String(rec.id) : null,
           practitioner_number: rec.memno !== null ? String(rec.memno) : null,
-          firm_number:         rec.firmno !== null ? String(rec.firmno) : null,
-          status:              rec.role_lkp !== null ? (ROLE_MAP[String(rec.role_lkp)] || rec.role_desc || null) : null,
-          start_date:          rec.start_date ? rec.start_date.toISOString() : null,
-          end_date:            rec.end_date ? rec.end_date.toISOString() : null,
-          discriminator:       rec.discriminator || null,
-          inactive_flag:       rec.inactive !== null ? !!rec.inactive : false,
-          external_id:         rec.external_id || rec.id,
-          last_updated:        rec.last_updated ? rec.last_updated.toISOString() : null,
+          firm_number: rec.firmno !== null ? String(rec.firmno) : null,
+          status: rec.role_lkp !== null ? (ROLE_MAP[String(rec.role_lkp)] || rec.role_desc || null) : null,
+          start_date: rec.start_date ? rec.start_date.toISOString() : null,
+          end_date: rec.end_date ? rec.end_date.toISOString() : null,
+          discriminator: rec.discriminator || null,
+          inactive_flag: rec.inactive !== null ? !!rec.inactive : false,
+          external_id: rec.external_id || rec.id,
+          last_updated: rec.last_updated ? rec.last_updated.toISOString() : null,
         };
 
         const wr = await fetchWithRetry(bubbleBase + 'wf/get_employmenthistory', {
@@ -3152,7 +3152,7 @@ async function doSyncProductionEmploymentHistory(topLimit = 5, trigger = 'manual
 
         if (wr.ok) {
           success++;
-          
+
           // Save checkpoint watermark
           if (!customIds || customIds.length === 0) {
             const nextWatermark = rec.last_updated ? rec.last_updated.toISOString() : originalWatermark;
@@ -3293,7 +3293,7 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
     // Register this sync
     const syncId = generateSyncId('audits');
     registerSync(syncId, 'audits');
-    
+
     // Reset stop flag for this entity
     stopFlags['audits'] = false;
 
@@ -3302,15 +3302,15 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
       if (shouldStopSync('audits', syncId)) {
         console.log(`\n🛑 [STOP SIGNAL] Audits sync ${syncId} stopped by user request`);
         console.log(`📊 Partial Stats: ${success} records synced from ${auditIndex}/${distinctKeys.length} audit records`);
-        
+
         // Unregister sync
         unregisterSync(syncId);
-        
+
         // Log partial completion
         const dur = Date.now() - start;
         await logSyncRun('Audits', success, errors, dur, 'stopped', failedIds.join(', '), trigger, bubbleBase);
         await logSyncPerformance('Audits', dur, success, 'stopped', bubbleBase);
-        
+
         // SSE: Broadcast stopped
         sendProgress('audits', {
           current: auditIndex,
@@ -3321,15 +3321,15 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
           recordsSynced: success,
           errors: errors
         });
-        
+
         return { success: false, synced: success, errors, entities: auditIndex, totalRows, stopped: true };
       }
-      
+
       auditIndex++;
       const progressPercent = Math.round((auditIndex / distinctKeys.length) * 100);
       console.log(`\n${'─'.repeat(60)}`);
       console.log(`📊 Progress: ${auditIndex}/${distinctKeys.length} audit records (${progressPercent}%)`);
-      
+
       // ── SSE: Broadcast progress ──
       sendProgress('audits', {
         current: auditIndex,
@@ -3338,7 +3338,7 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
         message: `Processing FirmNo ${key.FIRMNO} / Year ${key.Year}...`,
         entity: `${key.FIRMNO}/${key.Year}`
       });
-      
+
       const step2 = pool.request();
       step2.input('firmNo', sql.Int, key.FIRMNO);
       step2.input('year', sql.Int, key.Year);
@@ -3372,28 +3372,28 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
         const isLatestRow = new Date(rec.LastUpdated).getTime() === latestTrnDte.getTime();
         try {
           const payload = {
-            id:                      rec.ID !== null ? String(rec.ID) : null,
-            firm_no:                 rec.FIRMNO !== null ? String(rec.FIRMNO) : null,
-            due_date:                rec.AudDueDate || null,
-            received_date:           rec.Received || null,
-            qualified:               rec.Qualified || null,
-            year:                    rec.Year !== null ? String(rec.Year) : null,
-            audit_type:              rec.AuditType !== null ? String(rec.AuditType) : null,
-            approved:                rec.AuditApproved !== null ? String(rec.AuditApproved) : null,
-            approved_date:           rec.DateAuditApproved || null,
-            approved_by:             rec.UserAuditApproved || null,
-            financial_year_start:    rec.PeriodStartDate || null,
-            financial_year_end:      rec.PeriodEnddate || null,
-            audit_report_number:     rec.Reportno || null,
-            audit_fees_amount:       rec.ChargeAmt !== null ? Number(rec.ChargeAmt) : null,
-            actual_audit_fees:       rec.ActualAuditCosts !== null ? Number(rec.ActualAuditCosts) : null,
-            gross_interest_amount:   rec.GrossInt_62 !== null ? Number(rec.GrossInt_62) : null,
-            net_interest_amount:     rec.NettInterest !== null ? Number(rec.NettInterest) : null,
-            bank_charge_amount:      rec.BankCharge_63 !== null ? Number(rec.BankCharge_63) : null,
-            auditor:                 rec.AuditorID !== null ? String(rec.AuditorID) : null,
-            discriminator:           rec.Discriminator || null,
-            inactive_flag:           rec.InactiveFlag !== null ? String(rec.InactiveFlag) : null,
-            last_updated:            rec.LastUpdated || null,
+            id: rec.ID !== null ? String(rec.ID) : null,
+            firm_no: rec.FIRMNO !== null ? String(rec.FIRMNO) : null,
+            due_date: rec.AudDueDate || null,
+            received_date: rec.Received || null,
+            qualified: rec.Qualified || null,
+            year: rec.Year !== null ? String(rec.Year) : null,
+            audit_type: rec.AuditType !== null ? String(rec.AuditType) : null,
+            approved: rec.AuditApproved !== null ? String(rec.AuditApproved) : null,
+            approved_date: rec.DateAuditApproved || null,
+            approved_by: rec.UserAuditApproved || null,
+            financial_year_start: rec.PeriodStartDate || null,
+            financial_year_end: rec.PeriodEnddate || null,
+            audit_report_number: rec.Reportno || null,
+            audit_fees_amount: rec.ChargeAmt !== null ? Number(rec.ChargeAmt) : null,
+            actual_audit_fees: rec.ActualAuditCosts !== null ? Number(rec.ActualAuditCosts) : null,
+            gross_interest_amount: rec.GrossInt_62 !== null ? Number(rec.GrossInt_62) : null,
+            net_interest_amount: rec.NettInterest !== null ? Number(rec.NettInterest) : null,
+            bank_charge_amount: rec.BankCharge_63 !== null ? Number(rec.BankCharge_63) : null,
+            auditor: rec.AuditorID !== null ? String(rec.AuditorID) : null,
+            discriminator: rec.Discriminator || null,
+            inactive_flag: rec.InactiveFlag !== null ? String(rec.InactiveFlag) : null,
+            last_updated: rec.LastUpdated || null,
             audit_compliance_status: rec.AuditComplianceStatus || null,
           };
           const wr = await fetchWithRetry(bubbleBase + 'wf/get_audits', {
@@ -3405,7 +3405,7 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
             console.log(`  ✅ Synced audit FirmNo ${key.FIRMNO} / Year ${key.Year} (trn_dte: ${rec.LastUpdated})`);
             success++;
             auditKeyRows.push(rec);
-            
+
             // ── SSE: Broadcast record synced ──
             sendProgress('audits', {
               current: auditIndex,
@@ -3416,18 +3416,18 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
               isLatest: isLatestRow
             });
           }
- else {
+          else {
             const e = await wr.text();
             console.error(`  ❌ Failed audit FirmNo ${key.FIRMNO} / Year ${key.Year}: ${wr.status} - ${e}`);
             await logSyncError('Audits', `${key.FIRMNO}/${key.Year}`, `HTTP ${wr.status}: ${e}`, bubbleBase, 'API', wr.status);
-            errors++; 
+            errors++;
             auditKeyFailed = true;
             if (!failedIds.includes(`${key.FIRMNO}/${key.Year}`)) failedIds.push(`${key.FIRMNO}/${key.Year}`);
           }
         } catch (e) {
           console.error(`  ❌ Error audit FirmNo ${key.FIRMNO} / Year ${key.Year}:`, e.message);
           await logSyncError('Audits', `${key.FIRMNO}/${key.Year}`, e.message, bubbleBase, 'Network', 0, e.stack);
-          errors++; 
+          errors++;
           auditKeyFailed = true;
           if (!failedIds.includes(`${key.FIRMNO}/${key.Year}`)) failedIds.push(`${key.FIRMNO}/${key.Year}`);
         }
@@ -3443,24 +3443,24 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
       if (!auditKeyFailed && auditKeyRows.length > 0) {
         // Add this audit record's rows to the global tracking
         allProcessedRows.push(...auditKeyRows);
-        
+
         // Calculate the global minimum watermark across ALL processed rows
         const newWatermark = calculateGlobalMinWatermark(allProcessedRows, 'LastUpdated', originalWatermark);
-        
+
         // Update the watermark
         await fetch(bubbleBase + 'obj/syncconfig/' + getSyncConfigIds(isProduction).audits, {
           method: 'PATCH',
           headers: { Authorization: `Bearer ${bubbleToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ LastSyncTime: newWatermark }),
         });
-        
+
         console.log(`  💾 Checkpoint saved: FirmNo ${key.FIRMNO}/Year ${key.Year} processed → global watermark: ${newWatermark}`);
-        
+
         // ── Track GLOBAL minimum watermark (persists across flushes) ──
         if (new Date(newWatermark) < new Date(globalMinWatermark)) {
           globalMinWatermark = newWatermark;
         }
-        
+
         // ── MEMORY MANAGEMENT: Flush array if threshold exceeded ──
         if (allProcessedRows.length > MEMORY_FLUSH_THRESHOLD) {
           console.log(`\n🧹 [MEMORY] Flushing ${allProcessedRows.length} rows from memory (threshold: ${MEMORY_FLUSH_THRESHOLD})`);
@@ -3479,7 +3479,7 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
     const dur = Date.now() - start;
     // ✅ Use globalMinWatermark which persists across memory flushes
     const finalWatermark = globalMinWatermark;
-    
+
     console.log(`\n${'='.repeat(60)}`);
     console.log(`✅ Audits sync completed!`);
     console.log(`📊 Stats: ${success} records synced from ${distinctKeys.length} audit entries`);
@@ -3487,7 +3487,7 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
     console.log(`⏱️  Duration: ${(dur / 1000).toFixed(2)}s`);
     console.log(`🔄 Final watermark: ${finalWatermark} (global minimum across all processed rows)`);
     console.log(`${'='.repeat(60)}\n`);
-    
+
     await logSyncRun('Audits', success, errors, dur, errors === 0 ? 'success' : 'partial', failedIds.join(', '), trigger, bubbleBase);
     await logSyncPerformance('Audits', dur, success, errors === 0 ? 'success' : 'partial', bubbleBase);
 
@@ -3613,7 +3613,7 @@ async function doSyncProductionAudits(topLimit = 5, trigger = 'manual', bubbleBa
 
       recordIndex++;
       const progressPercent = Math.round((recordIndex / records.length) * 100);
-      
+
       sendProgress('audits', {
         current: recordIndex,
         total: records.length,
@@ -3627,16 +3627,16 @@ async function doSyncProductionAudits(topLimit = 5, trigger = 'manual', bubbleBa
 
       try {
         const payload = {
-          id:                      rec.ID !== null ? String(rec.ID) : null,
-          firm_no:                 rec.FIRMNO !== null ? String(rec.FIRMNO) : null,
-          qualified:               null,
-          year:                    null,
-          audit_type:              null,
-          approved:                null,
+          id: rec.ID !== null ? String(rec.ID) : null,
+          firm_no: rec.FIRMNO !== null ? String(rec.FIRMNO) : null,
+          qualified: null,
+          year: null,
+          audit_type: null,
+          approved: null,
           auditor_registration_no: rec.AuditorID || null,
-          inactive_flag:           rec.InactiveFlag === true || rec.InactiveFlag === 1 ? "yes" : "no",
-          last_updated:            rec.LastUpdated ? rec.LastUpdated.toISOString() : null,
-          external_id:             rec.ID !== null ? String(rec.ID) : null,
+          inactive_flag: rec.InactiveFlag === true || rec.InactiveFlag === 1 ? "yes" : "no",
+          last_updated: rec.LastUpdated ? rec.LastUpdated.toISOString() : null,
+          external_id: rec.ID !== null ? String(rec.ID) : null,
         };
 
         const wr = await fetchWithRetry(bubbleBase + 'wf/get_audits', {
@@ -3777,13 +3777,13 @@ app.get("/firms", async (req, res) => {
 app.post("/sync-firms", async (req, res) => {
   console.log(`[sync-firms] raw body:`, JSON.stringify(req.body));
   console.log(`[sync-firms] topLimit raw:`, req.body?.topLimit, typeof req.body?.topLimit);
-  const topLimit     = parseInt(req.body?.topLimit) || 5;
-  const trigger      = req.body?.trigger || 'manual';
-  const bubbleBase   = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
+  const topLimit = parseInt(req.body?.topLimit) || 5;
+  const trigger = req.body?.trigger || 'manual';
+  const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
   const isProduction = req.headers['x-environment'] === 'production';
-  const devRun       = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
-  const customIds    = req.body?.customIds || null;
-  const source       = req.body?.source || 'staging';
+  const devRun = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
+  const customIds = req.body?.customIds || null;
+  const source = req.body?.source || 'staging';
   try {
     const result = (source === 'production')
       ? await doSyncProductionFirms(topLimit, trigger, bubbleBase, devRun, isProduction, customIds)
@@ -3816,13 +3816,13 @@ app.get("/banks", async (req, res) => {
 });
 
 app.post("/sync-banks", async (req, res) => {
-  const topLimit     = parseInt(req.body?.topLimit) || 5;
-  const trigger      = req.body?.trigger || 'manual';
-  const bubbleBase   = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
+  const topLimit = parseInt(req.body?.topLimit) || 5;
+  const trigger = req.body?.trigger || 'manual';
+  const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
   const isProduction = req.headers['x-environment'] === 'production';
-  const devRun       = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
-  const customIds    = req.body?.customIds || null;
-  const source       = req.body?.source || 'staging';
+  const devRun = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
+  const customIds = req.body?.customIds || null;
+  const source = req.body?.source || 'staging';
   try {
     const result = (source === 'production')
       ? await doSyncProductionBanks(topLimit, trigger, bubbleBase, devRun, isProduction, customIds)
@@ -3862,21 +3862,21 @@ app.get("/practitioners", async (req, res) => {
 });
 
 app.post("/sync-practitioners", async (req, res) => {
-  const topLimit     = parseInt(req.body?.topLimit) || 5;
-  const trigger      = req.body?.trigger || 'manual';
-  const bubbleBase   = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
+  const topLimit = parseInt(req.body?.topLimit) || 5;
+  const trigger = req.body?.trigger || 'manual';
+  const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
   const isProduction = req.headers['x-environment'] === 'production';
-  const devRun       = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
-  const customIds    = req.body?.customIds || null;
-  const source       = req.body?.source || 'staging';
-  
+  const devRun = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
+  const customIds = req.body?.customIds || null;
+  const source = req.body?.source || 'staging';
+
   console.log(`🔵 [/sync-practitioners] Request received: topLimit=${topLimit}, devRun=${devRun}, source=${source}`);
-  
+
   try {
     const result = (source === 'production')
       ? await doSyncProductionPractitioners(topLimit, trigger, bubbleBase, devRun, isProduction, customIds)
       : await doSyncPractitioners(topLimit, trigger, bubbleBase, devRun, isProduction, customIds);
-    
+
     console.log(`✅ [/sync-practitioners] Sync completed successfully:`, result);
     res.json(result);
   } catch (err) {
@@ -3887,13 +3887,13 @@ app.post("/sync-practitioners", async (req, res) => {
 });
 
 app.post("/sync-practitioners-adm", async (req, res) => {
-  const topLimit     = parseInt(req.body?.topLimit) || 5;
-  const trigger      = req.body?.trigger || 'manual';
-  const bubbleBase   = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
+  const topLimit = parseInt(req.body?.topLimit) || 5;
+  const trigger = req.body?.trigger || 'manual';
+  const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
   const isProduction = req.headers['x-environment'] === 'production';
-  const devRun       = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
-  const customIds    = req.body?.customIds || null;
-  const source       = req.body?.source || 'staging';
+  const devRun = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
+  const customIds = req.body?.customIds || null;
+  const source = req.body?.source || 'staging';
   try {
     const result = (source === 'production')
       ? await doSyncProductionPractitionersAdm(topLimit, trigger, bubbleBase, devRun, isProduction, customIds)
@@ -3906,13 +3906,13 @@ app.post("/sync-practitioners-adm", async (req, res) => {
 
 // Alias route for dashboard manual push compatibility
 app.post('/sync-practitionersadm', async (req, res) => {
-  const topLimit     = parseInt(req.body?.topLimit) || 5;
-  const trigger      = req.body?.trigger || 'manual';
-  const bubbleBase   = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
+  const topLimit = parseInt(req.body?.topLimit) || 5;
+  const trigger = req.body?.trigger || 'manual';
+  const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
   const isProduction = req.headers['x-environment'] === 'production';
-  const devRun       = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
-  const customIds    = req.body?.customIds || null;
-  const source       = req.body?.source || 'staging';
+  const devRun = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
+  const customIds = req.body?.customIds || null;
+  const source = req.body?.source || 'staging';
   try {
     const result = (source === 'production')
       ? await doSyncProductionPractitionersAdm(topLimit, trigger, bubbleBase, devRun, isProduction, customIds)
@@ -3945,15 +3945,15 @@ app.get('/employment-history', async (req, res) => {
 });
 
 app.post('/sync-employment-history', async (req, res) => {
-  const topLimit     = parseInt(req.body?.topLimit) || 5;
-  const trigger      = req.body?.trigger || 'manual';
-  const bubbleBase   = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
+  const topLimit = parseInt(req.body?.topLimit) || 5;
+  const trigger = req.body?.trigger || 'manual';
+  const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
   const isProduction = req.headers['x-environment'] === 'production';
-  const devRun       = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
-  const customIds    = req.body?.customIds || null;
-  const source       = req.body?.source || 'staging';
+  const devRun = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
+  const customIds = req.body?.customIds || null;
+  const source = req.body?.source || 'staging';
   try {
-    const result = (source === 'production') 
+    const result = (source === 'production')
       ? await doSyncProductionEmploymentHistory(topLimit, trigger, bubbleBase, devRun, isProduction, customIds)
       : await doSyncEmploymentHistory(topLimit, trigger, bubbleBase, devRun, isProduction, customIds);
     res.json(result);
@@ -3964,13 +3964,13 @@ app.post('/sync-employment-history', async (req, res) => {
 
 // Alias route for dashboard manual push compatibility
 app.post('/sync-employmenthistory', async (req, res) => {
-  const topLimit     = parseInt(req.body?.topLimit) || 5;
-  const trigger      = req.body?.trigger || 'manual';
-  const bubbleBase   = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
+  const topLimit = parseInt(req.body?.topLimit) || 5;
+  const trigger = req.body?.trigger || 'manual';
+  const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
   const isProduction = req.headers['x-environment'] === 'production';
-  const devRun       = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
-  const customIds    = req.body?.customIds || null;
-  const source       = req.body?.source || 'staging';
+  const devRun = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
+  const customIds = req.body?.customIds || null;
+  const source = req.body?.source || 'staging';
   try {
     const result = (source === 'production')
       ? await doSyncProductionEmploymentHistory(topLimit, trigger, bubbleBase, devRun, isProduction, customIds)
@@ -4005,13 +4005,13 @@ app.get('/audits', async (req, res) => {
 });
 
 app.post('/sync-audits', async (req, res) => {
-  const topLimit     = parseInt(req.body?.topLimit) || 5;
-  const trigger      = req.body?.trigger || 'manual';
-  const bubbleBase   = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
+  const topLimit = parseInt(req.body?.topLimit) || 5;
+  const trigger = req.body?.trigger || 'manual';
+  const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
   const isProduction = req.headers['x-environment'] === 'production';
-  const devRun       = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
-  const customIds    = req.body?.customIds || null;
-  const source       = req.body?.source || 'staging';
+  const devRun = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
+  const customIds = req.body?.customIds || null;
+  const source = req.body?.source || 'staging';
   try {
     const result = (source === 'production')
       ? await doSyncProductionAudits(topLimit, trigger, bubbleBase, devRun, isProduction, customIds)
@@ -4038,7 +4038,7 @@ app.get('/dashboard/logs', async (req, res) => {
 
 app.get('/dashboard/logs/raw', async (req, res) => {
   try {
-    const r    = await fetch(
+    const r = await fetch(
       `${DEFAULT_BUBBLE_BASE}obj/synclog?limit=3`,
       { headers: { Authorization: `Bearer ${bubbleToken}` } }
     );
@@ -4291,14 +4291,14 @@ app.get('/dashboard/bulk-delete/status', (req, res) => {
 
 app.get('/dashboard/preview/:table', async (req, res) => {
   const tableMap = {
-    'firms':              { dbTable: 'LPFF_FFC_ITG.dbo.itg_inn_firm_data', config: config, sortField: 'trn_dte' },
-    'banks':              { dbTable: 'LPFF_FFC_ITG.dbo.itg_inn_firm_bank', config: config, sortField: 'trn_dte' },
-    'practitioners':      { dbTable: 'LPFF_FFC_ITG.dbo.itg_inn_mem_data', config: config, sortField: 'trn_dte' },
-    'practitionersadm':   { dbTable: 'LPFF_FFC_ITG.dbo.itg_inn_mem_adm', config: config, sortField: 'trn_dte' },
+    'firms': { dbTable: 'LPFF_FFC_ITG.dbo.itg_inn_firm_data', config: config, sortField: 'trn_dte' },
+    'banks': { dbTable: 'LPFF_FFC_ITG.dbo.itg_inn_firm_bank', config: config, sortField: 'trn_dte' },
+    'practitioners': { dbTable: 'LPFF_FFC_ITG.dbo.itg_inn_mem_data', config: config, sortField: 'trn_dte' },
+    'practitionersadm': { dbTable: 'LPFF_FFC_ITG.dbo.itg_inn_mem_adm', config: config, sortField: 'trn_dte' },
     'employment-history': { dbTable: 'LPFF_FFC_ITG.dbo.itg_inn_tblemploymenthistory', config: config, sortField: 'trn_dte' },
-    'audits':             { dbTable: 'LPFF_FFC_ITG.dbo.itg_inn_audits', config: config, sortField: 'trn_dte' },
-    'applications':       { dbTable: 'Lic_LicenseApplications', config: importsConfig, sortField: 'Frwk_LastUpdatedTimestamp' },
-    'certificates':       { dbTable: 'Lic_Licenses', config: importsConfig, sortField: 'Frwk_LastUpdatedTimestamp' },
+    'audits': { dbTable: 'LPFF_FFC_ITG.dbo.itg_inn_audits', config: config, sortField: 'trn_dte' },
+    'applications': { dbTable: 'Lic_LicenseApplications', config: importsConfig, sortField: 'Frwk_LastUpdatedTimestamp' },
+    'certificates': { dbTable: 'Lic_Licenses', config: importsConfig, sortField: 'Frwk_LastUpdatedTimestamp' },
   };
   const target = tableMap[req.params.table];
   if (!target) return res.status(400).json({ success: false, error: 'Unknown table' });
@@ -4327,12 +4327,12 @@ app.post('/reset-sync-time', async (req, res) => {
   const isDevVersion = bubbleBase.includes('/version-test/');
   const ids = getSyncConfigIds(!isDevVersion);
   const configMap = {
-    'Firms':             bubbleBase + 'obj/syncconfig/' + ids.firms,
-    'Banks':             bubbleBase + 'obj/syncconfig/' + ids.banks,
-    'Practitioners':     bubbleBase + 'obj/syncconfig/' + ids.practitioners,
-    'PractitionersAdm':  bubbleBase + 'obj/syncconfig/' + ids.practitionersadm,
+    'Firms': bubbleBase + 'obj/syncconfig/' + ids.firms,
+    'Banks': bubbleBase + 'obj/syncconfig/' + ids.banks,
+    'Practitioners': bubbleBase + 'obj/syncconfig/' + ids.practitioners,
+    'PractitionersAdm': bubbleBase + 'obj/syncconfig/' + ids.practitionersadm,
     'EmploymentHistory': bubbleBase + 'obj/syncconfig/' + ids.employmentHistory,
-    'Audits':            bubbleBase + 'obj/syncconfig/' + ids.audits,
+    'Audits': bubbleBase + 'obj/syncconfig/' + ids.audits,
   };
   const url = configMap[table];
   if (!url) return res.status(400).json({ success: false, error: 'Unknown table' });
@@ -4352,7 +4352,7 @@ app.post('/reset-sync-time', async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
-}); 
+});
 
 app.get('/dashboard/performance', async (req, res) => {
   const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
@@ -4361,27 +4361,27 @@ app.get('/dashboard/performance', async (req, res) => {
       `${bubbleBase}obj/syncperformance?limit=100`,
       { headers: { Authorization: `Bearer ${bubbleToken}` } }
     );
-    const data    = await r.json();
+    const data = await r.json();
     const records = data.response?.results || [];
     const tableMap = {};
     for (const rec of records) {
       const t = rec.Table;
       if (!tableMap[t]) tableMap[t] = { table: t, lastRun: null, lastDurationMs: null, lastStatus: null, totalMs: 0, count: 0 };
       if (!tableMap[t].lastRun) {
-        tableMap[t].lastRun        = rec.RunTimestamp;
+        tableMap[t].lastRun = rec.RunTimestamp;
         tableMap[t].lastDurationMs = rec.DurationMs;
-        tableMap[t].lastStatus     = rec.Status;
+        tableMap[t].lastStatus = rec.Status;
       }
       tableMap[t].totalMs += rec.DurationMs || 0;
       tableMap[t].count++;
     }
     const summary = Object.values(tableMap).map(t => ({
-      table:          t.table,
-      lastRun:        t.lastRun,
+      table: t.table,
+      lastRun: t.lastRun,
       lastDurationMs: t.lastDurationMs,
-      avgDurationMs:  t.count > 0 ? Math.round(t.totalMs / t.count) : null,
-      lastStatus:     t.lastStatus,
-      totalRuns:      t.count,
+      avgDurationMs: t.count > 0 ? Math.round(t.totalMs / t.count) : null,
+      lastStatus: t.lastStatus,
+      totalRuns: t.count,
     }));
     res.json({ success: true, performance: summary });
   } catch (err) {
@@ -4391,7 +4391,7 @@ app.get('/dashboard/performance', async (req, res) => {
 
 app.get('/dashboard/performance/raw', async (req, res) => {
   try {
-    const r    = await fetch(
+    const r = await fetch(
       `${DEFAULT_BUBBLE_BASE}obj/syncperformance?limit=3`,
       { headers: { Authorization: `Bearer ${bubbleToken}` } }
     );
@@ -4407,12 +4407,12 @@ app.get('/dashboard/sql-info', async (req, res) => {
   try {
     pool = await sql.connect(config);
     const tables = [
-      { name: 'itg_inn_firm_data',            label: 'Firms' },
-      { name: 'itg_inn_firm_bank',            label: 'Banks' },
-      { name: 'itg_inn_mem_data',             label: 'Practitioners' },
-      { name: 'itg_inn_mem_adm',              label: 'PractitionersAdm' },
+      { name: 'itg_inn_firm_data', label: 'Firms' },
+      { name: 'itg_inn_firm_bank', label: 'Banks' },
+      { name: 'itg_inn_mem_data', label: 'Practitioners' },
+      { name: 'itg_inn_mem_adm', label: 'PractitionersAdm' },
       { name: 'itg_inn_tblemploymenthistory', label: 'EmploymentHistory' },
-      { name: 'itg_inn_audits',               label: 'Audits' },
+      { name: 'itg_inn_audits', label: 'Audits' },
     ];
     const results = await Promise.all(tables.map(async (t) => {
       try {
@@ -4464,6 +4464,7 @@ const CACHE_TTL_MS = 60000; // 60 seconds
 const RECON_CONFIG = {
   firms: {
     cacheFile: '.cache_lpff.firms.view.json',
+    bubbleTable: 'lpff.firms.view',
     sqlQuery: `SELECT Id, Aff_FirmNo as firm_number, Name as name, Frwk_InactiveFlag as inactive 
                FROM dbo.Core_Organisations 
                WHERE Frwk_Discriminator = 'Aff.Firm'`,
@@ -4482,6 +4483,7 @@ const RECON_CONFIG = {
   },
   banks: {
     cacheFile: '.cache_lpff.bankaccounts.view.json',
+    bubbleTable: 'lpff.bankaccounts.view',
     sqlQuery: `SELECT ba.Id as bank_id, ba.AccountNumber as account_number, ba.Frwk_InactiveFlag as inactive, org.Aff_FirmNo as firm_number
                FROM dbo.Core_BankAccounts ba
                LEFT JOIN dbo.Core_Organisations org ON ba.Aff_FirmId = org.Id`,
@@ -4503,6 +4505,7 @@ const RECON_CONFIG = {
   },
   practitioners: {
     cacheFile: '.cache_lpff.practitioner.view.json',
+    bubbleTable: 'lpff.practitioner.view',
     sqlQuery: `SELECT Id, Aff_PractitionerNo as practitioner_number, FullName as name, Frwk_InactiveFlag as inactive
                FROM dbo.Core_Persons 
                WHERE Frwk_Discriminator = 'Aff.Practitioner'`,
@@ -4521,6 +4524,7 @@ const RECON_CONFIG = {
   },
   practitionersadm: {
     cacheFile: '.cache_lpff.practitioner.view.json',
+    bubbleTable: 'lpff.practitioner.view',
     sqlQuery: `SELECT Id, Aff_PractitionerNo as practitioner_number, 
                       Aff_IsAttorney as attorney, Aff_IsConveyancer as conveyancer,
                       Aff_IsNotary as notary, Aff_IsAdvocate as advocate
@@ -4539,6 +4543,7 @@ const RECON_CONFIG = {
   },
   employmenthistory: {
     cacheFile: '.cache_lpff.employment.history.view.json',
+    bubbleTable: 'lpff.employment.history.view',
     sqlQuery: `SELECT 
                  cop.Id as id,
                  p.Aff_PractitionerNo as memno,
@@ -4568,6 +4573,7 @@ const RECON_CONFIG = {
   },
   audits: {
     cacheFile: '.cache_lpff.firm.audits.view.json',
+    bubbleTable: 'lpff.firm.audits.view',
     sqlQuery: `SELECT Id, FirmNo as firm_number, Year, Frwk_InactiveFlag as inactive 
                FROM dbo.Aff_FirmFinancialYears`,
     getSqlKey: r => String(r.Id || r.id || '').trim().toLowerCase(),
@@ -4579,6 +4585,30 @@ const RECON_CONFIG = {
       if (normalizeBoolean(s.inactive) !== normalizeBoolean(b.Inactive)) diffs.push('Inactive');
       return diffs;
     }
+  },
+  applications: {
+    cacheFile: '.cache_lpff.application.view.json',
+    bubbleTable: 'lpff.application.view',
+    sqlQuery: `SELECT a.Id as sql_key
+               FROM dbo.Lic_LicenseApplications a
+               INNER JOIN dbo.Core_Periods p ON a.PeriodId = p.Id
+               INNER JOIN dbo.Core_Persons pe ON pe.Id = a.ApplicantId AND pe.Frwk_InactiveFlag = 0
+               WHERE a.Frwk_InactiveFlag = 0`,
+    getSqlKey: r => String(r.sql_key || '').trim().toLowerCase(),
+    getBubbleKey: r => String(r['ID'] || r['id'] || '').trim().toLowerCase(),
+    checkDiffs: (s, b) => []
+  },
+  certificates: {
+    cacheFile: '.cache_lpff.certificates.view.json',
+    bubbleTable: 'lpff.certificates.view',
+    sqlQuery: `SELECT l.Id as sql_key
+               FROM dbo.Lic_Licenses l
+               INNER JOIN dbo.Lic_LicenseApplications a ON a.LicenseId = l.Id
+               INNER JOIN dbo.Core_Persons pe ON pe.Id = l.LicenseHolderPersonId AND pe.Frwk_InactiveFlag = 0
+               WHERE l.Frwk_InactiveFlag = 0 AND a.Frwk_InactiveFlag = 0`,
+    getSqlKey: r => String(r.sql_key || '').trim().toLowerCase(),
+    getBubbleKey: r => String(r['id'] || r['ID'] || '').trim().toLowerCase(),
+    checkDiffs: (s, b) => []
   }
 };
 
@@ -4623,20 +4653,22 @@ const DIFF_MAP = {
     'FirmNo': 'Field mismatch',
     'Year': 'Field mismatch',
     'Inactive': 'Field mismatch'
-  }
+  },
+  applications: {},
+  certificates: {}
 };
 
 function computeTableHealth(id, sqlCount, bubbleCount, missingInBubble, missingInSQL, fieldMismatches) {
   if (sqlCount === '—' || bubbleCount === '—' || typeof sqlCount !== 'number' || typeof bubbleCount !== 'number') {
     return 'Unknown';
   }
-  
+
   const total = sqlCount || 1;
-  
+
   // Escape Hatch: Missing records are weighted heavily toward Critical/Warning
   const missingInBubblePct = (missingInBubble || 0) / total;
   const missingInSQLPct = (missingInSQL || 0) / total;
-  
+
   if (missingInBubblePct > 0.01 || missingInSQLPct > 0.01) {
     return 'Critical';
   }
@@ -4647,12 +4679,12 @@ function computeTableHealth(id, sqlCount, bubbleCount, missingInBubble, missingI
   // Count alignment delta
   const delta = Math.abs(sqlCount - bubbleCount);
   const deltaPct = delta / total;
-  
+
   // Unexplained field mismatch percentage
   const accepted = ACCEPTED_MISMATCHES[id] || 0;
   const unexplained = Math.max(0, fieldMismatches - accepted);
   const unexplainedPct = unexplained / total;
-  
+
   // General Thresholds:
   // - Critical: deltaPct > 2.0% OR unexplainedPct > 2.0%
   // - Warning: deltaPct > 0.5% OR unexplainedPct > 0.5%
@@ -4662,7 +4694,7 @@ function computeTableHealth(id, sqlCount, bubbleCount, missingInBubble, missingI
   } else if (deltaPct > 0.005 || unexplainedPct > 0.005) {
     return 'Warning';
   }
-  
+
   return 'Healthy';
 }
 
@@ -4670,7 +4702,7 @@ let dashboardPool = null;
 async function getDashboardPool() {
   if (dashboardPool) {
     if (dashboardPool.connected) return dashboardPool;
-    try { await dashboardPool.close(); } catch (_) {}
+    try { await dashboardPool.close(); } catch (_) { }
   }
   console.log('⚡ Initializing private SQL connection pool for dashboard...');
   dashboardPool = new sql.ConnectionPool(importsConfig);
@@ -4686,7 +4718,7 @@ async function runQueryOnPrivatePool(queryStr) {
     const res = await pool.request().query(queryStr);
     return res.recordset;
   } finally {
-    try { await pool.close(); } catch (_) {}
+    try { await pool.close(); } catch (_) { }
   }
 }
 
@@ -4701,7 +4733,7 @@ async function fetchLiveCounts(bubbleBase, bubbleToken) {
     applications: { sql: 0, bubble: 0 },
     certificates: { sql: 0, bubble: 0 }
   };
-  
+
   let success = false;
   try {
     const pool = await getDashboardPool();
@@ -4726,7 +4758,7 @@ async function fetchLiveCounts(bubbleBase, bubbleToken) {
         WHERE l.Frwk_InactiveFlag = 0 AND a.Frwk_InactiveFlag = 0
       `)
     ]);
-    
+
     counts.firms.sql = firmsRes.recordset[0].count;
     counts.banks.sql = banksRes.recordset[0].count;
     counts.practitioners.sql = pracsRes.recordset[0].count;
@@ -4739,7 +4771,7 @@ async function fetchLiveCounts(bubbleBase, bubbleToken) {
   } catch (err) {
     console.error('Error fetching live SQL counts for summary:', err.stack);
   }
-  
+
   try {
     const urls = {
       firms: 'obj/lpff.firms.view?limit=1',
@@ -4751,7 +4783,7 @@ async function fetchLiveCounts(bubbleBase, bubbleToken) {
       applications: 'obj/lpff.application.view?limit=1',
       certificates: 'obj/lpff.certificates.view?limit=1'
     };
-    
+
     const bubblePromises = Object.entries(urls).map(async ([key, path]) => {
       try {
         const res = await fetch(`${bubbleBase}${path}`, {
@@ -4768,13 +4800,94 @@ async function fetchLiveCounts(bubbleBase, bubbleToken) {
         console.warn(`Failed to fetch Bubble count for ${key}:`, err.message);
       }
     });
-    
+
     await Promise.all(bubblePromises);
   } catch (err) {
     console.error('Error fetching live Bubble counts for summary:', err.message);
   }
-  
+
   return success ? counts : null;
+}
+
+async function downloadBubbleCache(id) {
+  const tableConfig = RECON_CONFIG[id];
+  if (!tableConfig) return;
+  
+  const typeName = tableConfig.bubbleTable;
+  const cachePath = path.join('D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment', tableConfig.cacheFile);
+  
+  console.log(`[Reconciliation] Downloading Bubble cache for ${id} (${typeName}) in background...`);
+  
+  const allRecords = [];
+  let cursor = 0;
+  let remaining = 1;
+  const CONCURRENCY = 8;
+  
+  while (remaining > 0) {
+    const promises = [];
+    for (let c = 0; c < CONCURRENCY; c++) {
+      const pageCursor = cursor + c * 100;
+      promises.push((async (cur) => {
+        let attempt = 0;
+        while (attempt < 5) {
+          try {
+            const url = `${DEFAULT_BUBBLE_BASE}obj/${typeName}?limit=100&cursor=${cur}`;
+            const res = await fetch(url, { 
+              headers: { Authorization: `Bearer ${bubbleToken}` },
+              signal: AbortSignal.timeout(15000)
+            });
+            if (res.status === 429) {
+              await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+              attempt++;
+              continue;
+            }
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            return data.response;
+          } catch (err) {
+            attempt++;
+            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+          }
+        }
+        throw new Error(`Failed to fetch page cursor ${cur} after 5 attempts`);
+      })(pageCursor));
+    }
+    
+    try {
+      const results = await Promise.all(promises);
+      let pageFetched = 0;
+      let ended = false;
+      
+      for (const r of results) {
+        if (r && r.results) {
+          allRecords.push(...r.results);
+          pageFetched += r.results.length;
+          remaining = r.remaining || 0;
+        } else {
+          ended = true;
+        }
+      }
+      
+      cursor += CONCURRENCY * 100;
+      if (pageFetched === 0 || ended || remaining === 0) {
+        break;
+      }
+    } catch (e) {
+      console.error(`[Reconciliation] Bubble cache download failed for ${id} during concurrent batch:`, e.message);
+      return;
+    }
+  }
+  
+  try {
+    const dir = path.dirname(cachePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(cachePath, JSON.stringify(allRecords), 'utf8');
+    console.log(`[Reconciliation] Successfully saved ${allRecords.length} records to Bubble cache: ${cachePath}`);
+  } catch (err) {
+    console.error(`[Reconciliation] Failed to write cache file for ${id}:`, err.message);
+  }
 }
 
 const reconciliationLocks = {};
@@ -4785,24 +4898,29 @@ async function runSingleTableReconciliation(id) {
     console.log(`[Reconciliation] Single-table run for ${id} is already in progress.`);
     return;
   }
-  
+
   reconciliationLocks[id] = true;
   console.log(`[Reconciliation] Starting background single-table check for: ${id}`);
-  
+
   try {
     const tableConfig = RECON_CONFIG[id];
     const cachePath = path.join('D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment', tableConfig.cacheFile);
-    
+
+    if (!fs.existsSync(cachePath) || (Date.now() - fs.statSync(cachePath).mtimeMs > 24 * 3600000)) {
+      console.log(`[Reconciliation] Cache file for ${id} is missing or stale. Triggering download first...`);
+      await downloadBubbleCache(id);
+    }
+
     if (!fs.existsSync(cachePath)) {
-      console.warn(`[Reconciliation] Cache file not found for ${id}: ${cachePath}`);
+      console.warn(`[Reconciliation] Cache file still not found for ${id}: ${cachePath}`);
       reconciliationLocks[id] = false;
       return;
     }
-    
+
     const bubbleRecords = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
-    
+
     const sqlRecords = await runQueryOnPrivatePool(tableConfig.sqlQuery);
-    
+
     const sqlGroups = {};
     sqlRecords.forEach(r => {
       const key = tableConfig.getSqlKey(r);
@@ -4902,7 +5020,7 @@ async function runSingleTableReconciliation(id) {
       lastReconciledTime: new Date().toISOString(),
       discrepancy_ids: discrepancyIds
     };
-    
+
     const statsPath = path.join(__dirname, `stats_${id}.json`);
     fs.writeFileSync(statsPath, JSON.stringify(stats, null, 2), 'utf8');
     console.log(`[Reconciliation] Successfully saved stats for ${id} to ${statsPath}`);
@@ -4917,7 +5035,7 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
   const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
   const isDevVersion = bubbleBase.includes('/version-test/');
   const syncConfigIdsList = getSyncConfigIds(!isDevVersion);
-  
+
   const entityIds = ['firms', 'banks', 'practitioners', 'practitionersadm', 'employmenthistory', 'audits', 'applications', 'certificates'];
   const entityLabels = {
     firms: 'Firms',
@@ -4929,7 +5047,7 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
     applications: 'Applications',
     certificates: 'Certificates'
   };
-  
+
   const tableStats = {};
   entityIds.forEach(id => {
     tableStats[id] = {
@@ -4976,9 +5094,9 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
     tableStats[id].drilldown = drilldownStats[id] || null;
   });
 
-  const idsToLoad = ['firms', 'banks', 'practitioners', 'practitionersadm', 'employmenthistory', 'audits'];
+  const idsToLoad = ['firms', 'banks', 'practitioners', 'practitionersadm', 'employmenthistory', 'audits', 'applications', 'certificates'];
   let parsedFromMds = false;
-  
+
   idsToLoad.forEach(id => {
     const statsPath = path.join(__dirname, `stats_${id}.json`);
     if (fs.existsSync(statsPath)) {
@@ -5005,7 +5123,7 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
     console.log('[Reconciliation] Some JSON stats files missing, parsing MD reports as fallback migration...');
     const reportPath = 'D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment\\reconciliation_summary_report.md';
     const ehReportPath = 'D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment\\EmploymentHistory\\employment_history_reconciliation_findings_report.md';
-    
+
     try {
       if (fs.existsSync(reportPath)) {
         const content = fs.readFileSync(reportPath, 'utf8');
@@ -5022,14 +5140,14 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
               const missingBubble = parseInt(parts[6].replace(/[\s\u00a0,]/g, ''));
               const missingSQL = parseInt(parts[7].replace(/[\s\u00a0,]/g, ''));
               const fieldMismatch = parseInt(parts[8].replace(/[\s\u00a0,]/g, ''));
-              
+
               let id = '';
               if (rawName.toLowerCase().includes('firm')) id = 'firms';
               else if (rawName.toLowerCase().includes('bank')) id = 'banks';
               else if (rawName.toLowerCase().includes('practitioners admissions') || rawName.toLowerCase().includes('practitioner admissions')) id = 'practitionersadm';
               else if (rawName.toLowerCase().includes('practitioner')) id = 'practitioners';
               else if (rawName.toLowerCase().includes('audit')) id = 'audits';
-              
+
               if (id && tableStats[id] && tableStats[id].sqlCount === '—') {
                 const stats = {
                   sqlCount: isNaN(sqlVal) ? 0 : sqlVal,
@@ -5049,7 +5167,7 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
                 tableStats[id].missingInSQL = stats.missingInSQL;
                 tableStats[id].fieldMismatches = stats.fieldMismatches;
                 tableStats[id].lastReconciledTime = stats.lastReconciledTime;
-                
+
                 fs.writeFileSync(path.join(__dirname, `stats_${id}.json`), JSON.stringify(stats, null, 2), 'utf8');
               }
             }
@@ -5064,10 +5182,10 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
       if (fs.existsSync(ehReportPath) && tableStats['employmenthistory'].sqlCount === '—') {
         const content = fs.readFileSync(ehReportPath, 'utf8');
         const lines = content.split('\n');
-        
+
         let sqlVal = 0, bubbleVal = 0, sqlDup = 0, bubbleDup = 0;
         let missingBubble = 0, missingSQL = 0, fieldMismatch = 0;
-        
+
         const extractMdValue = (line) => {
           const parts = line.split('**');
           if (parts.length >= 4) {
@@ -5178,17 +5296,17 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
     if (tableStats[id]) {
       tableStats[id].sqlCount = counts[id].sql;
       tableStats[id].bubbleCount = counts[id].bubble;
-      
-      const missingBubble = (id === 'applications' || id === 'certificates') 
-        ? Math.max(0, counts[id].sql - counts[id].bubble) 
-        : (tableStats[id].missingInBubble || 0);
+
+      const missingBubble = (tableStats[id].missingInBubble !== undefined && tableStats[id].lastReconciledTime)
+        ? tableStats[id].missingInBubble
+        : ((id === 'applications' || id === 'certificates') ? Math.max(0, counts[id].sql - counts[id].bubble) : 0);
 
       tableStats[id].health = computeTableHealth(
-        id, 
-        counts[id].sql, 
-        counts[id].bubble, 
-        missingBubble, 
-        tableStats[id].missingInSQL || 0, 
+        id,
+        counts[id].sql,
+        counts[id].bubble,
+        missingBubble,
+        tableStats[id].missingInSQL || 0,
         tableStats[id].fieldMismatches || 0
       );
     }
@@ -5253,52 +5371,54 @@ app.post('/dashboard/reconciliation/run', (req, res) => {
   if (isReconciliationRunning) {
     return res.status(400).json({ success: false, message: 'Reconciliation is already running' });
   }
-  
+
   isReconciliationRunning = true;
   reconciliationProgress = 'Starting reconciliation...';
-  
+
   const { spawn } = require('child_process');
   const scriptPath = path.join(__dirname, 'scratch_reconcile_five_tables.js');
   const ehScriptPath = path.join(__dirname, 'scratch_reconcile_eh_production.js');
-  
+
   console.log(`[Reconciliation] Spawning background job: ${scriptPath}`);
   const child = spawn('node', [scriptPath], { cwd: __dirname });
-  
+
   child.stdout.on('data', (data) => {
     console.log(`[Reconciliation stdout] ${data}`);
     reconciliationProgress = data.toString();
   });
-  
+
   child.stderr.on('data', (data) => {
     console.error(`[Reconciliation stderr] ${data}`);
   });
-  
+
   child.on('close', (code) => {
     console.log(`[Reconciliation] Five tables script exited with code ${code}`);
     reconciliationProgress = 'Five tables finished. Running Employment History reconciliation...';
-    
+
     console.log(`[Reconciliation] Spawning background job: ${ehScriptPath}`);
     const ehChild = spawn('node', [ehScriptPath], { cwd: __dirname });
-    
+
     ehChild.stdout.on('data', (data) => {
       console.log(`[EH Reconciliation stdout] ${data}`);
       reconciliationProgress = data.toString();
     });
-    
+
     ehChild.stderr.on('data', (data) => {
       console.error(`[EH Reconciliation stderr] ${data}`);
     });
-    
+
     ehChild.on('close', (ehCode) => {
       console.log(`[Reconciliation] EH script exited with code ${ehCode}`);
-      
+
       Promise.all([
         runSingleTableReconciliation('firms'),
         runSingleTableReconciliation('banks'),
         runSingleTableReconciliation('practitioners'),
         runSingleTableReconciliation('practitionersadm'),
         runSingleTableReconciliation('employmenthistory'),
-        runSingleTableReconciliation('audits')
+        runSingleTableReconciliation('audits'),
+        runSingleTableReconciliation('applications'),
+        runSingleTableReconciliation('certificates')
       ]).then(() => {
         console.log('[Reconciliation] All stats JSON files regenerated successfully.');
         LIVE_COUNTS_CACHE.expiresAt = 0; // Invalidate cache
@@ -5311,7 +5431,7 @@ app.post('/dashboard/reconciliation/run', (req, res) => {
       });
     });
   });
-  
+
   res.json({ success: true, message: 'Reconciliation run started in background' });
 });
 
@@ -5371,31 +5491,31 @@ function resetStopFlags() {
 }
 
 const SYNC_ROUTE_MAP = {
-  'firms':              (top, trigger = 'scheduled', base = DEFAULT_BUBBLE_BASE, isProduction = false, devRun = null, customIds = null, source = 'staging') => 
+  'firms': (top, trigger = 'scheduled', base = DEFAULT_BUBBLE_BASE, isProduction = false, devRun = null, customIds = null, source = 'staging') =>
     (source === 'production')
       ? doSyncProductionFirms(parseInt(top) || 5, trigger, base, devRun !== null ? devRun : 0, isProduction, customIds)
       : doSyncFirms(parseInt(top) || 5, trigger, base, devRun !== null ? devRun : (isProduction ? 0 : 1), isProduction, customIds),
-  'banks':              (top, trigger = 'scheduled', base = DEFAULT_BUBBLE_BASE, isProduction = false, devRun = null, customIds = null, source = 'staging') => 
+  'banks': (top, trigger = 'scheduled', base = DEFAULT_BUBBLE_BASE, isProduction = false, devRun = null, customIds = null, source = 'staging') =>
     (source === 'production')
       ? doSyncProductionBanks(parseInt(top) || 5, trigger, base, devRun !== null ? devRun : 0, isProduction, customIds)
       : doSyncBanks(parseInt(top) || 5, trigger, base, devRun !== null ? devRun : (isProduction ? 0 : 1), isProduction, customIds),
-  'practitioners':      (top, trigger = 'scheduled', base = DEFAULT_BUBBLE_BASE, isProduction = false, devRun = null, customIds = null, source = 'staging') => 
+  'practitioners': (top, trigger = 'scheduled', base = DEFAULT_BUBBLE_BASE, isProduction = false, devRun = null, customIds = null, source = 'staging') =>
     (source === 'production')
       ? doSyncProductionPractitioners(parseInt(top) || 5, trigger, base, devRun !== null ? devRun : 0, isProduction, customIds)
       : doSyncPractitioners(parseInt(top) || 5, trigger, base, devRun !== null ? devRun : (isProduction ? 0 : 1), isProduction, customIds),
-  'practitionersadm':   (top, trigger = 'scheduled', base = DEFAULT_BUBBLE_BASE, isProduction = false, devRun = null, customIds = null, source = 'staging') => 
+  'practitionersadm': (top, trigger = 'scheduled', base = DEFAULT_BUBBLE_BASE, isProduction = false, devRun = null, customIds = null, source = 'staging') =>
     (source === 'production')
       ? doSyncProductionPractitionersAdm(parseInt(top) || 5, trigger, base, devRun !== null ? devRun : 0, isProduction, customIds)
       : doSyncPractitionersAdm(parseInt(top) || 5, trigger, base, devRun !== null ? devRun : (isProduction ? 0 : 1), isProduction, customIds),
-  'employment-history': (top, trigger = 'scheduled', base = DEFAULT_BUBBLE_BASE, isProduction = false, devRun = null, customIds = null, source = 'staging') => 
+  'employment-history': (top, trigger = 'scheduled', base = DEFAULT_BUBBLE_BASE, isProduction = false, devRun = null, customIds = null, source = 'staging') =>
     (source === 'production')
       ? doSyncProductionEmploymentHistory(parseInt(top) || 5, trigger, base, devRun !== null ? devRun : 0, isProduction, customIds)
       : doSyncEmploymentHistory(parseInt(top) || 5, trigger, base, devRun !== null ? devRun : (isProduction ? 0 : 1), isProduction, customIds),
-  'employmenthistory':   (top, trigger = 'scheduled', base = DEFAULT_BUBBLE_BASE, isProduction = false, devRun = null, customIds = null, source = 'staging') => 
+  'employmenthistory': (top, trigger = 'scheduled', base = DEFAULT_BUBBLE_BASE, isProduction = false, devRun = null, customIds = null, source = 'staging') =>
     (source === 'production')
       ? doSyncProductionEmploymentHistory(parseInt(top) || 5, trigger, base, devRun !== null ? devRun : 0, isProduction, customIds)
       : doSyncEmploymentHistory(parseInt(top) || 5, trigger, base, devRun !== null ? devRun : (isProduction ? 0 : 1), isProduction, customIds),
-  'audits':             (top, trigger = 'scheduled', base = DEFAULT_BUBBLE_BASE, isProduction = false, devRun = null, customIds = null, source = 'staging') => 
+  'audits': (top, trigger = 'scheduled', base = DEFAULT_BUBBLE_BASE, isProduction = false, devRun = null, customIds = null, source = 'staging') =>
     (source === 'production')
       ? doSyncProductionAudits(parseInt(top) || 5, trigger, base, devRun !== null ? devRun : 0, isProduction, customIds)
       : doSyncAudits(parseInt(top) || 5, trigger, base, devRun !== null ? devRun : (isProduction ? 0 : 1), isProduction, customIds),
@@ -5424,22 +5544,22 @@ app.post('/scheduler/start', (req, res) => {
   if (serverSchedulers[tableId])
     return res.json({ success: true, message: 'Already running', tableId });
 
-  const mins         = parseInt(intervalMinutes) || 15;
-  const ms           = mins * 60 * 1000;
-  const top          = parseInt(topLimit) || 5;
+  const mins = parseInt(intervalMinutes) || 15;
+  const ms = mins * 60 * 1000;
+  const top = parseInt(topLimit) || 5;
   const isProduction = req.headers['x-environment'] === 'production';
-  const nextRun      = new Date(Date.now() + ms).toISOString();
+  const nextRun = new Date(Date.now() + ms).toISOString();
 
   const devRun = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
 
   serverSchedulers[tableId] = {
     intervalMinutes: mins,
-    topLimit:        top,
-    bubbleBase:      bubbleBase,
-    isProduction:    isProduction,
-    devRun:          devRun,
-    source:          source,
-    startedAt:       new Date().toISOString(),
+    topLimit: top,
+    bubbleBase: bubbleBase,
+    isProduction: isProduction,
+    devRun: devRun,
+    source: source,
+    startedAt: new Date().toISOString(),
     nextRun,
     timer: setInterval(async () => {
       try {
@@ -5478,10 +5598,10 @@ app.post('/scheduler/start-all', (req, res) => {
   if (masterSequentialTimer) { clearInterval(masterSequentialTimer); masterSequentialTimer = null; }
   Object.keys(serverSchedulers).forEach(id => { clearInterval(serverSchedulers[id].timer); delete serverSchedulers[id]; });
 
-  const mins       = parseInt(intervalMinutes) || 15;
-  const ms         = mins * 60 * 1000;
-  const stagger    = parseInt(staggerSecs)     || 0;
-  const top        = parseInt(topLimit)        || 5;
+  const mins = parseInt(intervalMinutes) || 15;
+  const ms = mins * 60 * 1000;
+  const stagger = parseInt(staggerSecs) || 0;
+  const top = parseInt(topLimit) || 5;
   const orderedIds = Array.isArray(order) ? order : Object.keys(SYNC_ROUTE_MAP);
 
   console.log(`🟢 Start-All — mode: ${mode}, interval: ${mins}min, stagger: ${stagger}s, TOP: ${top}, base: ${bubbleBase}`);
@@ -5515,11 +5635,11 @@ app.post('/scheduler/start-all', (req, res) => {
         const nextRun = new Date(Date.now() + ms).toISOString();
         serverSchedulers[id] = {
           intervalMinutes: mins,
-          topLimit:        top,
-          bubbleBase:      bubbleBase,
-          isProduction:    isProduction,
-          source:          source,
-          startedAt:       new Date().toISOString(),
+          topLimit: top,
+          bubbleBase: bubbleBase,
+          isProduction: isProduction,
+          source: source,
+          startedAt: new Date().toISOString(),
           nextRun,
           timer: setInterval(async () => {
             try {
@@ -5543,11 +5663,11 @@ app.post('/scheduler/start-all', (req, res) => {
       const nextRun = new Date(Date.now() + ms).toISOString();
       serverSchedulers[id] = {
         intervalMinutes: mins,
-        topLimit:        top,
-        bubbleBase:      bubbleBase,
-        isProduction:    isProduction,
-        source:          source,
-        startedAt:       new Date().toISOString(),
+        topLimit: top,
+        bubbleBase: bubbleBase,
+        isProduction: isProduction,
+        source: source,
+        startedAt: new Date().toISOString(),
         nextRun,
         timer: setInterval(async () => {
           await SYNC_ROUTE_MAP[id](top, 'scheduled', serverSchedulers[id].bubbleBase, serverSchedulers[id].isProduction, null, null, serverSchedulers[id].source);
@@ -5581,10 +5701,10 @@ app.post('/scheduler/run-now', (req, res) => {
 
   const { mode, order, staggerSecs, topLimit, sources } = req.body;
   const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
-  const stagger      = parseInt(staggerSecs) || 0;
-  const top          = parseInt(topLimit)    || 5;
+  const stagger = parseInt(staggerSecs) || 0;
+  const top = parseInt(topLimit) || 5;
   const isProduction = req.headers['x-environment'] === 'production';
-  const orderedIds   = Array.isArray(order) ? order : Object.keys(SYNC_ROUTE_MAP);
+  const orderedIds = Array.isArray(order) ? order : Object.keys(SYNC_ROUTE_MAP);
 
   console.log(`▶️  Run-Now — mode: ${mode}, TOP: ${top}, stagger: ${stagger}s, base: ${bubbleBase}, prod: ${isProduction}`);
 
@@ -5628,21 +5748,21 @@ app.get('/scheduler/status', (req, res) => {
   Object.keys(serverSchedulers).forEach(id => {
     const s = serverSchedulers[id];
     status[id] = {
-      running:         true,
+      running: true,
       intervalMinutes: s.intervalMinutes,
-      topLimit:        s.topLimit,
-      bubbleBase:      s.bubbleBase,
-      startedAt:       s.startedAt,
-      nextRun:         s.nextRun,
+      topLimit: s.topLimit,
+      bubbleBase: s.bubbleBase,
+      startedAt: s.startedAt,
+      nextRun: s.nextRun,
     };
   });
   res.json({
-    success:          true,
-    bootLockActive:   Date.now() - SERVER_BOOT_TIME < 30000,
+    success: true,
+    bootLockActive: Date.now() - SERVER_BOOT_TIME < 30000,
     masterSequential: masterSequentialTimer !== null,
-    running:          Object.keys(serverSchedulers),
-    schedulers:       status,
-    activeSyncs:      Object.keys(activeSyncs).map(id => ({
+    running: Object.keys(serverSchedulers),
+    schedulers: status,
+    activeSyncs: Object.keys(activeSyncs).map(id => ({
       syncId: id,
       entity: activeSyncs[id].entity,
       startedAt: activeSyncs[id].startedAt,
@@ -5654,19 +5774,19 @@ app.get('/scheduler/status', (req, res) => {
 // ─── /sync/stop ──────────────────────────────────────────────────────────────
 app.post('/sync/stop', (req, res) => {
   const { entity } = req.body;
-  
+
   if (!entity) {
     return res.status(400).json({ success: false, error: 'Missing entity parameter' });
   }
-  
+
   if (!SYNC_ROUTE_MAP[entity]) {
     return res.status(400).json({ success: false, error: `Unknown entity: ${entity}` });
   }
-  
+
   stopEntity(entity);
-  
+
   const affectedSyncs = Object.keys(activeSyncs).filter(id => activeSyncs[id].entity === entity);
-  
+
   res.json({
     success: true,
     entity,
@@ -5679,9 +5799,9 @@ app.post('/sync/stop', (req, res) => {
 // ─── /sync/stop-all ──────────────────────────────────────────────────────────
 app.post('/sync/stop-all', (req, res) => {
   stopAllEntities();
-  
+
   const affectedSyncs = Object.keys(activeSyncs);
-  
+
   res.json({
     success: true,
     message: 'Stop signal sent to ALL entities',
@@ -5699,7 +5819,7 @@ app.get('/sync/active', (req, res) => {
     shouldStop: activeSyncs[id].shouldStop,
     duration: Math.round((Date.now() - new Date(activeSyncs[id].startedAt).getTime()) / 1000) + 's',
   }));
-  
+
   res.json({
     success: true,
     count: syncs.length,
@@ -5731,8 +5851,8 @@ app.get('/circuit-breaker/status', (req, res) => {
   for (const [endpoint, breaker] of circuitBreakers.entries()) {
     status[endpoint] = breaker.getState();
   }
-  res.json({ 
-    success: true, 
+  res.json({
+    success: true,
     circuitBreakers: status,
     totalEndpoints: circuitBreakers.size
   });
@@ -5740,7 +5860,7 @@ app.get('/circuit-breaker/status', (req, res) => {
 
 app.post('/circuit-breaker/reset', (req, res) => {
   const { endpoint } = req.body;
-  
+
   if (endpoint) {
     // Reset specific endpoint
     const breaker = circuitBreakers.get(endpoint);
@@ -5775,7 +5895,7 @@ function loadImportsWatermark() {
   } catch (error) {
     console.error('❌ Error loading imports watermark:', error.message);
   }
-  return { 
+  return {
     applications: '1900-01-01T00:00:00.000Z',
     certificates: '1900-01-01T00:00:00.000Z'
   };
@@ -5817,13 +5937,13 @@ async function doSyncApplications(topLimit = 5, trigger = 'manual', bubbleBase =
   const table = 'applications';
   const syncId = 'imports_' + table + '_' + Date.now();
   console.log(`[doSyncApplications] Called [topLimit=${topLimit}] [trigger=${trigger}] [year=${year}] [customIds=${customIds ? customIds.length : null}] [source=${source}]`);
-  
+
   if (importsActiveSyncs[table]) {
     throw new Error('Applications sync already in progress');
   }
-  
+
   registerImportsSync(syncId, table);
-  
+
   const start = Date.now();
   const failedIds = [];
   let pool;
@@ -5838,7 +5958,7 @@ async function doSyncApplications(topLimit = 5, trigger = 'manual', bubbleBase =
     if (customIds && customIds.length > 0) {
       const guidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       validCustomIds = customIds.filter(id => guidRegex.test(String(id).trim()));
-      
+
       if (validCustomIds.length === 0) {
         const msg = '❌ Error: No valid SQL GUID IDs provided for applications sync. Please check your selected ID column or file.';
         console.error(msg);
@@ -5851,7 +5971,7 @@ async function doSyncApplications(topLimit = 5, trigger = 'manual', bubbleBase =
         });
         return { success: false, error: 'No valid GUIDs' };
       }
-      
+
       if (validCustomIds.length < customIds.length) {
         sendProgress(table, {
           message: `⚠️ Ignored ${customIds.length - validCustomIds.length} invalid GUIDs (not matching UUID format).`
@@ -6073,6 +6193,7 @@ async function doSyncApplications(topLimit = 5, trigger = 'manual', bubbleBase =
 
     unregisterImportsSync(table);
     LIVE_COUNTS_CACHE.expiresAt = 0;
+    runSingleTableReconciliation('applications').catch(err => console.error('[Reconciliation] Applications background recon failed:', err.message));
     return { success: errors === 0, synced: success, total: records.length, errors };
 
   } catch (err) {
@@ -6101,13 +6222,13 @@ async function doSyncCertificates(topLimit = 5, trigger = 'manual', bubbleBase =
   const table = 'certificates';
   const syncId = 'imports_' + table + '_' + Date.now();
   console.log(`[doSyncCertificates] Called [topLimit=${topLimit}] [trigger=${trigger}] [year=${year}] [options=${JSON.stringify(options)}] [customIds=${customIds ? customIds.length : null}] [source=${source}]`);
-  
+
   if (importsActiveSyncs[table]) {
     throw new Error('Certificates sync already in progress');
   }
-  
+
   registerImportsSync(syncId, table);
-  
+
   const start = Date.now();
   const failedIds = [];
   let pool;
@@ -6122,7 +6243,7 @@ async function doSyncCertificates(topLimit = 5, trigger = 'manual', bubbleBase =
     if (customIds && customIds.length > 0) {
       const guidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       validCustomIds = customIds.filter(id => guidRegex.test(String(id).trim()));
-      
+
       if (validCustomIds.length === 0) {
         const msg = '❌ Error: No valid SQL GUID IDs provided for certificates sync. Please check your selected ID column or file.';
         console.error(msg);
@@ -6135,7 +6256,7 @@ async function doSyncCertificates(topLimit = 5, trigger = 'manual', bubbleBase =
         });
         return { success: false, error: 'No valid GUIDs' };
       }
-      
+
       if (validCustomIds.length < customIds.length) {
         sendProgress(table, {
           message: `⚠️ Ignored ${customIds.length - validCustomIds.length} invalid GUIDs (not matching UUID format).`
@@ -6368,6 +6489,7 @@ async function doSyncCertificates(topLimit = 5, trigger = 'manual', bubbleBase =
 
     unregisterImportsSync(table);
     LIVE_COUNTS_CACHE.expiresAt = 0;
+    runSingleTableReconciliation('certificates').catch(err => console.error('[Reconciliation] Certificates background recon failed:', err.message));
     return { success: errors === 0, synced: success, total: records.length, errors };
 
   } catch (err) {
@@ -6400,21 +6522,21 @@ app.post('/imports/reset-watermark', (req, res) => {
   const { table, timestamp, year } = req.body;
   const resetTime = timestamp || '1900-01-01T00:00:00.000Z';
   const activeYear = (year && year !== 'All' && String(year).trim() !== '') ? String(year).trim() : null;
-  
+
   if (table && (table === 'applications' || table === 'certificates')) {
     saveImportsWatermark(table, resetTime, activeYear);
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: `✅ Watermark for ${table}${activeYear ? '_' + activeYear : ''} reset to ${resetTime}`,
-      watermarks: loadImportsWatermark() 
+      watermarks: loadImportsWatermark()
     });
   } else {
     saveImportsWatermark('applications', resetTime, activeYear);
     saveImportsWatermark('certificates', resetTime, activeYear);
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: `✅ All watermarks reset to ${resetTime}`,
-      watermarks: loadImportsWatermark() 
+      watermarks: loadImportsWatermark()
     });
   }
 });
@@ -6425,10 +6547,10 @@ app.post('/imports/sync/applications', async (req, res) => {
     const { topLimit = 5, year, customIds, source = 'production' } = req.body;
     const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
     const isProduction = !bubbleBase.includes('/version-test/');
-    
+
     doSyncApplications(topLimit, 'manual', bubbleBase, isProduction, year, customIds, source)
       .catch(err => console.error('Background Applications sync failed:', err.message));
-      
+
     res.json({ success: true, message: 'Applications sync started in background' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -6440,10 +6562,10 @@ app.post('/imports/sync/certificates', async (req, res) => {
     const { topLimit = 5, year, activeCertOnly, activeAppOnly, activePersonOnly, hasAppOnly, customIds, source = 'production' } = req.body;
     const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
     const isProduction = !bubbleBase.includes('/version-test/');
-    
+
     doSyncCertificates(topLimit, 'manual', bubbleBase, isProduction, year, { activeCertOnly, activeAppOnly, activePersonOnly, hasAppOnly }, customIds, source)
       .catch(err => console.error('Background Certificates sync failed:', err.message));
-      
+
     res.json({ success: true, message: 'Certificates sync started in background' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -6481,7 +6603,7 @@ const sseClients = {}; // { tableId: [res1, res2, ...] }
 // SSE endpoint — clients connect here to receive progress updates
 app.get('/sync-progress/:table', (req, res) => {
   const { table } = req.params;
-  
+
   // Set SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -6520,9 +6642,9 @@ function sendProgress(table, data) {
     console.log(`[SSE] ⚠️  No clients connected to ${table} — skipping broadcast`);
     return;
   }
-  
+
   const message = `data: ${JSON.stringify({ type: 'progress', table, ...data })}\n\n`;
-  
+
   sseClients[table].forEach(client => {
     try {
       client.write(message);
@@ -6530,7 +6652,7 @@ function sendProgress(table, data) {
       console.error(`[SSE] Failed to send to client:`, err.message);
     }
   });
-  
+
   console.log(`[SSE] ✓ Sent to ${table}: ${data.message || data.status || 'update'} (${sseClients[table].length} client(s))`);
 }
 
