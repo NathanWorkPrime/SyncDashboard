@@ -65,15 +65,20 @@ The browser session video demonstrating page-level toggling between DEV/PROD, im
 - **Practitioners Admissions Scoping**: Narrowed the practitioners admission check rule to target only active Practising Members (`Aff_StatusLkp = 1 AND Aff_LegalPractitionerTypeLkp = 1108`) with zero admission flags, dropping the anomaly count from `17,295` to exactly **`410`**.
 - **New Bank Account Integrity Rule**: Integrated a new SQL Data Integrity rule to flag `"Active Account with missing Account Number"` (matching active open accounts in SQL where the account number is empty). This rule flags **`6,882`** records in production, which are displayed on the dashboard for human review alongside the existing firm-link rules.
 - **One-Time Manual Backfill**:
-  - Sequentially processed and successfully backfilled **`1,177`** active, valid-account-number records that were missing in Bubble.
-  * **Success Rate**: **`100%`** (1,177 attempted, 1,177 succeeded, 0 errors).
-  * **Duration**: **`224.34 seconds`** (~190ms per record including API delay).
-  * **Reconciliation Impact**: Triggered a fresh reconciliation run (after deleting the stale Bubble cache to force downloading the new live dataset). Verified that the **"Missing in Bubble"** count for bank accounts dropped from **`8,831`** to **`7,314`**.
+  - **Active Batch**: Sequentially processed and successfully backfilled **`1,177`** active, valid-account-number records that were missing in Bubble.
+    * **Success Rate**: **`100%`** (1,177/1,177).
+    * **Duration**: **`224.34 seconds`** (~190ms/record).
+  - **Soft-Deleted Batch**: Sequentially processed and successfully backfilled **`1,024`** soft-deleted, valid-account-number records that were missing in Bubble (increased from the original 901 estimation due to recent active-to-inactive database transitions in SQL).
+    * **Success Rate**: **`100%`** (1,024/1,024).
+    * **Duration**: **`162.89 seconds`** (~159ms/record).
+  - **Reconciliation Impact**: Forced a fresh Bubble cache download and re-run reconciliation. Verified that the **"Missing in Bubble"** count for bank accounts dropped precisely from **`7,314`** to exactly **`6,290`** (a perfect reduction of exactly `1,024` with zero external drift in that window).
 
 ### Integrity & Dashboard Verification
 - **Screenshot showing the new SQL Data Integrity counts and the updated Banks counts**:
   ![Banks SQL Data Integrity & Backfilled Counts](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/banks_integrity_rules_1786627351737.png)
-- **Interactive Verification Video**:
+- **Screenshot showing the final Banks Missing count (6,290) after the soft-deleted backfill**:
+  ![Final Banks Reconciled Count](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/dashboard_banks_reconciled_1786628822458.png)
+- **Interactive Verification Video (Active Backfill & Settings)**:
   ![Live Dashboard Video Verification](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/verify_recon_dashboard_1786627244610.webp)
-
-
+- **Interactive Verification Video (Soft-Deleted Backfill & Counts Refresh)**:
+  ![Live Dashboard Soft-Deleted Backfill Video Verification](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/verify_inactive_recon_1786627792518.webp)
