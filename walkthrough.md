@@ -82,3 +82,15 @@ The browser session video demonstrating page-level toggling between DEV/PROD, im
   ![Live Dashboard Video Verification](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/verify_recon_dashboard_1786627244610.webp)
 - **Interactive Verification Video (Soft-Deleted Backfill & Counts Refresh)**:
   ![Live Dashboard Soft-Deleted Backfill Video Verification](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/verify_inactive_recon_1786627792518.webp)
+
+## 7. User-Facing Label Renaming (Missing in SQL $\rightarrow$ Extra in Bubble)
+- **Problem**: The term "Missing in SQL" was directionally confusing and ambiguous because it actually represented records that exist in Bubble but have no equivalent in SQL (i.e. "Extra in Bubble").
+- **Solution**:
+  - Updated the main dashboard table header from **"Missing (SQL)"** to **"Extra (Bubble)"** inside [dashboard.html](file:///d:/Antigravity/LPFF%20Sync%201/dashboard.html).
+  - Renamed the dynamic category key from `"Missing in SQL"` to `"Extra in Bubble"` in [server.js](file:///d:/Antigravity/LPFF%20Sync%201/server.js) so that all dynamically rendered row details panels and discrepancy categories read consistently as **"Extra in Bubble"**.
+  - Updated fallback drilldown categories for consistency.
+- **Verification**:
+  - **Screenshot showing the renamed column headers and category drilldown labels**:
+    ![Renamed Dashboard Labels](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/expanded_banks_detail_1786629735804.png)
+  - **Interactive Verification Video**:
+    ![Label Renaming Video Verification](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/verify_label_renaming_1786629697203.webp)

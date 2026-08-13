@@ -5101,7 +5101,7 @@ async function runSingleTableReconciliation(id, isProduction = false, bubbleBase
     let fieldMismatches = 0;
     const discrepancyIds = {
       "Missing in Bubble": missingInBubbleIds,
-      "Missing in SQL": missingInSQLIds,
+      "Extra in Bubble": missingInSQLIds,
       "SQL Duplicates": sqlDuplicateIds,
       "Bubble Duplicates": bubbleDuplicateIds
     };
@@ -5228,7 +5228,7 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
     banks: { "Missing reference": 7374, "Inactive Flag": 557 },
     practitioners: { "Whitespace mismatch": 896 },
     practitionersadm: { "Admission Flags mismatch": 1830 },
-    audits: { "Missing in Bubble": 20346, "Missing in SQL": 16090, "Field mismatch": 4266 },
+    audits: { "Missing in Bubble": 20346, "Extra in Bubble": 16090, "Field mismatch": 4266 },
     employmenthistory: { "Type mismatches": 1083 }
   };
 
