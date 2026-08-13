@@ -94,3 +94,23 @@ The browser session video demonstrating page-level toggling between DEV/PROD, im
     ![Renamed Dashboard Labels](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/expanded_banks_detail_1786629735804.png)
   - **Interactive Verification Video**:
     ![Label Renaming Video Verification](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/verify_label_renaming_1786629697203.webp)
+
+## 8. Deletion of Extra/Orphan Bank Accounts in Bubble (51,575 records)
+- **Problem**: There were 51,575 legacy orphan bank account records present in Bubble that did not exist in SQL (originally labeled "Missing in SQL", now renamed to "Extra in Bubble"). These records pre-dated the sync configurations (created Nov 10, 2025 by `admin_user_fidfundffc_test`) and had no associated SQL accounts.
+- **Safety Checks**:
+  - **In-Flight safety**: Filtered out any records created or modified in the last 7 days (resulting in 0 exclusions, as all 51,575 candidates were legacy records).
+  - **Inbound Reference check**: Scanned Firms, Practitioners, Audits, Applications, Certificates, and Period Firm Practitioners cache files. Confirmed that **exactly 0** of the 51,575 candidates had inbound references pointing to them in other tables.
+- **Execution**:
+  - Logged all 51,575 candidates to [bank_accounts_would_be_deleted.csv](file:///d:/Antigravity/LPFF%20Sync%201/bank_accounts_would_be_deleted.csv).
+  - Executed deletions against the Production API using batch processing (concurrency 15, delay 250ms, with exponential backoff on HTTP 429 rate limit errors).
+  - **Success Rate**: **`100%`** (exactly `51,575` of `51,575` records deleted successfully with 0 failures).
+  - **Duration**: **`1,431 seconds`** (23.85 minutes).
+- **Verification**:
+  - Invalidated local caches and triggered a fresh production reconciliation run.
+  - Verified that the Bubble Banks count dropped from **`109,814`** to exactly **`58,239`**.
+  - Verified that the dashboard **"Extra (Bubble)"** discrepancy count for Banks dropped from **`51,575`** to exactly **`0`**.
+  - **Verification Screenshot**:
+    ![Post-Deletion Reconciled Counts](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/banks_expanded_details_scrolled_1786632313876.png)
+  - **Interactive Verification Video**:
+    ![Post-Deletion Video Verification](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/verify_post_deletion_dashboard_1786632229962.webp)
+

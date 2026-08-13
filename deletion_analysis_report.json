@@ -1,0 +1,189 @@
+{
+  "totalExtra": 51575,
+  "deletionCandidatesCount": 51575,
+  "inFlightCount": 0,
+  "cutoffDate": "2026-08-06T14:04:55.657Z",
+  "includedSamples": [
+    {
+      "_id": "1762779977441x157918612564018620",
+      "Id": 3431,
+      "accountNumber": "1160957754",
+      "createdDate": "2025-11-10T13:06:17.441Z",
+      "modifiedDate": "2026-01-14T12:39:15.471Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977446x951873479239104100",
+      "Id": 18042,
+      "accountNumber": "62183753",
+      "createdDate": "2025-11-10T13:06:17.446Z",
+      "modifiedDate": "2026-01-14T12:39:15.727Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977450x519584393665268900",
+      "Id": 18033,
+      "accountNumber": "50892098010",
+      "createdDate": "2025-11-10T13:06:17.450Z",
+      "modifiedDate": "2026-01-14T12:39:16.039Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977453x101828443326309920",
+      "Id": 6392694,
+      "accountNumber": "N/A",
+      "createdDate": "2025-11-10T13:06:17.453Z",
+      "modifiedDate": "2026-01-14T12:39:16.054Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977459x703001400080743700",
+      "Id": 10127684,
+      "accountNumber": "50933927508",
+      "createdDate": "2025-11-10T13:06:17.459Z",
+      "modifiedDate": "2026-01-14T12:39:16.463Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977463x682693198272381800",
+      "Id": 10127685,
+      "accountNumber": "51710178520",
+      "createdDate": "2025-11-10T13:06:17.463Z",
+      "modifiedDate": "2026-01-14T12:39:16.556Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977466x210616607615375040",
+      "Id": 10127686,
+      "accountNumber": "50261128828",
+      "createdDate": "2025-11-10T13:06:17.466Z",
+      "modifiedDate": "2026-01-14T12:39:16.534Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977469x355145425427518800",
+      "Id": 10127687,
+      "accountNumber": "1445910071",
+      "createdDate": "2025-11-10T13:06:17.469Z",
+      "modifiedDate": "2026-01-14T12:39:16.507Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977479x358274603597025660",
+      "Id": 10127688,
+      "accountNumber": "4062008343",
+      "createdDate": "2025-11-10T13:06:17.479Z",
+      "modifiedDate": "2026-01-14T12:39:16.541Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977484x770905715002405000",
+      "Id": 10127689,
+      "accountNumber": "1267790023",
+      "createdDate": "2025-11-10T13:06:17.484Z",
+      "modifiedDate": "2026-01-14T12:39:16.611Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977487x307521243126503740",
+      "Id": 10127691,
+      "accountNumber": "1357810601",
+      "createdDate": "2025-11-10T13:06:17.487Z",
+      "modifiedDate": "2026-01-14T12:39:16.680Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977490x937134074068842400",
+      "Id": 10127692,
+      "accountNumber": "011874678",
+      "createdDate": "2025-11-10T13:06:17.490Z",
+      "modifiedDate": "2026-01-14T12:39:16.660Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977493x524709242866679300",
+      "Id": 10127694,
+      "accountNumber": "041221885",
+      "createdDate": "2025-11-10T13:06:17.493Z",
+      "modifiedDate": "2026-01-14T12:39:16.674Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977496x815410819380609800",
+      "Id": 10127695,
+      "accountNumber": "1604567953",
+      "createdDate": "2025-11-10T13:06:17.496Z",
+      "modifiedDate": "2026-01-14T12:39:17.145Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977501x148725919889945100",
+      "Id": 10127696,
+      "accountNumber": "1648151078",
+      "createdDate": "2025-11-10T13:06:17.501Z",
+      "modifiedDate": "2026-01-14T12:39:16.938Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977504x745224748002004500",
+      "Id": 10127697,
+      "accountNumber": "1165013126",
+      "createdDate": "2025-11-10T13:06:17.504Z",
+      "modifiedDate": "2026-01-14T12:39:16.903Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977508x638188270717195800",
+      "Id": 10127698,
+      "accountNumber": "1232121002",
+      "createdDate": "2025-11-10T13:06:17.508Z",
+      "modifiedDate": "2026-01-14T12:39:16.991Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977511x386867105347767500",
+      "Id": 9132462,
+      "accountNumber": "51421150966",
+      "createdDate": "2025-11-10T13:06:17.511Z",
+      "modifiedDate": "2026-01-14T12:39:17.119Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977515x539498602252949300",
+      "Id": 9132463,
+      "accountNumber": "51425498883",
+      "createdDate": "2025-11-10T13:06:17.515Z",
+      "modifiedDate": "2026-01-14T12:39:17.039Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    },
+    {
+      "_id": "1762779977519x741794205304595300",
+      "Id": 9132464,
+      "accountNumber": "50931167908",
+      "createdDate": "2025-11-10T13:06:17.519Z",
+      "modifiedDate": "2026-01-14T12:39:17.078Z",
+      "createdBy": "admin_user_fidfundffc_test",
+      "firmId": "0"
+    }
+  ],
+  "excludedSamples": []
+}

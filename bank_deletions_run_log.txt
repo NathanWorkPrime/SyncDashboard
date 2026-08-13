@@ -1,0 +1,10 @@
+Deletion run started at 2026-08-13T14:14:15.864Z
+Target Base URL: https://fidfunddev.site/api/1.1/
+Total records: 51575
+
+
+✅ Deletion run completed at 2026-08-13T14:38:07.364Z
+Total processed: 51575
+Success count: 51575
+Fail count: 0
+Duration: 1431s
