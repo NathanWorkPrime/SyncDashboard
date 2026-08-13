@@ -481,6 +481,19 @@ const DEFAULT_BUBBLE_BASE = DEFAULT_BUBBLE_ENV === 'production'
   ? process.env.BUBBLE_BASE_PROD
   : process.env.BUBBLE_BASE_DEV;
 
+function getBubbleCredentials(isProduction, bubbleBase = null) {
+  if (bubbleBase) {
+    const baseIsProd = !bubbleBase.includes('/version-test/');
+    if (isProduction !== baseIsProd) {
+      throw new Error(`Environment mismatch: isProduction=${isProduction} but bubbleBase='${bubbleBase}'`);
+    }
+  }
+  return {
+    base: isProduction ? process.env.BUBBLE_BASE_PROD : process.env.BUBBLE_BASE_DEV,
+    token: isProduction ? process.env.BUBBLE_TOKEN_PROD : process.env.BUBBLE_TOKEN_DEV
+  };
+}
+
 const SYNC_CONFIG_IDS_LIVE = {
   firms: '1778651429513x106836507335746900',
   banks: '1778747218142x780024036299171500',
@@ -559,6 +572,7 @@ const CIRCLE_MAP = {
 };
 // ─── doSyncFirms ─────────────────────────────────────────────────────────────
 async function doSyncFirms(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
+  const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   console.log(`[doSyncFirms] Called [devRun=${devRun}] [topLimit=${topLimit}] [customIds=${customIds ? customIds.length : null}]`);
   let pool;
   let syncId; // Declare at function scope so it's accessible everywhere
@@ -911,6 +925,7 @@ async function doSyncFirms(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
 }
 
 async function doSyncProductionFirms(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
+  const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   console.log(`[doSyncProductionFirms] Called [devRun=${devRun}] [topLimit=${topLimit}] [customIds=${customIds ? customIds.length : null}]`);
   let pool;
   let syncId;
@@ -1127,7 +1142,7 @@ async function doSyncProductionFirms(topLimit = 5, trigger = 'manual', bubbleBas
       errors: errors
     });
 
-    runSingleTableReconciliation('firms').catch(err => console.error('Firms background recon failed:', err.message));
+    runSingleTableReconciliation('firms', isProduction, bubbleBase).catch(err => console.error('Firms background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
   } finally {
     if (syncId) unregisterSync(syncId);
@@ -1137,6 +1152,7 @@ async function doSyncProductionFirms(topLimit = 5, trigger = 'manual', bubbleBas
 
 // ─── doSyncBanks ─────────────────────────────────────────────────────────────
 async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
+  const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   console.log(`[doSyncBanks] Called [devRun=${devRun}] [topLimit=${topLimit}] [customIds=${customIds ? customIds.length : null}]`);
   let pool;
   let syncId; // Declare at function scope so it's accessible everywhere
@@ -1440,6 +1456,7 @@ async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
 }
 
 async function doSyncProductionBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
+  const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   console.log(`[doSyncProductionBanks] Called [devRun=${devRun}] [topLimit=${topLimit}] [customIds=${customIds ? customIds.length : null}]`);
   let pool;
   let syncId;
@@ -1643,7 +1660,7 @@ async function doSyncProductionBanks(topLimit = 5, trigger = 'manual', bubbleBas
       errors: errors
     });
 
-    runSingleTableReconciliation('banks').catch(err => console.error('Banks background recon failed:', err.message));
+    runSingleTableReconciliation('banks', isProduction, bubbleBase).catch(err => console.error('Banks background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
   } finally {
     if (syncId) unregisterSync(syncId);
@@ -1652,6 +1669,7 @@ async function doSyncProductionBanks(topLimit = 5, trigger = 'manual', bubbleBas
 }
 // ─── doSyncPractitioners ─────────────────────────────────────────────────────
 async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
+  const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   console.log(`[doSyncPractitioners] Called [devRun=${devRun}] [topLimit=${topLimit}] [customIds=${customIds ? customIds.length : null}]`);
   let pool;
   try {
@@ -1987,6 +2005,7 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
 }
 
 async function doSyncProductionPractitioners(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
+  const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   console.log(`[doSyncProductionPractitioners] Called [devRun=${devRun}] [topLimit=${topLimit}] [customIds=${customIds ? customIds.length : null}]`);
   let pool;
   let syncId;
@@ -2201,7 +2220,7 @@ async function doSyncProductionPractitioners(topLimit = 5, trigger = 'manual', b
       errors: errors
     });
 
-    runSingleTableReconciliation('practitioners').catch(err => console.error('Practitioners background recon failed:', err.message));
+    runSingleTableReconciliation('practitioners', isProduction, bubbleBase).catch(err => console.error('Practitioners background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
   } finally {
     if (syncId) unregisterSync(syncId);
@@ -2211,6 +2230,7 @@ async function doSyncProductionPractitioners(topLimit = 5, trigger = 'manual', b
 
 // ─── doSyncPractitionersAdm ──────────────────────────────────────────────────
 async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
+  const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   console.log(`[doSyncPractitionersAdm] Called [devRun=${devRun}] [topLimit=${topLimit}] [customIds=${customIds ? customIds.length : null}]`);
   let pool;
   try {
@@ -2490,6 +2510,7 @@ async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBa
 }
 
 async function doSyncProductionPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
+  const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   console.log(`[doSyncProductionPractitionersAdm] Called [devRun=${devRun}] [topLimit=${topLimit}] [customIds=${customIds ? customIds.length : null}]`);
   let pool;
   let syncId;
@@ -2686,7 +2707,7 @@ async function doSyncProductionPractitionersAdm(topLimit = 5, trigger = 'manual'
       errors: errors
     });
 
-    runSingleTableReconciliation('practitionersadm').catch(err => console.error('PractitionersAdm background recon failed:', err.message));
+    runSingleTableReconciliation('practitionersadm', isProduction, bubbleBase).catch(err => console.error('PractitionersAdm background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
   } finally {
     if (syncId) unregisterSync(syncId);
@@ -2695,6 +2716,7 @@ async function doSyncProductionPractitionersAdm(topLimit = 5, trigger = 'manual'
 }
 // ─── doSyncEmploymentHistory ─────────────────────────────────────────────────
 async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
+  const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   console.log(`[doSyncEmploymentHistory] Called [devRun=${devRun}] [topLimit=${topLimit}] [customIds=${customIds ? customIds.length : null}]`);
   let pool;
   try {
@@ -3006,6 +3028,7 @@ async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleB
 }
 
 async function doSyncProductionEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
+  const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   console.log(`[doSyncProductionEmploymentHistory] Called [devRun=${devRun}] [topLimit=${topLimit}] [customIds=${customIds ? customIds.length : null}]`);
   let pool;
   try {
@@ -3187,7 +3210,7 @@ async function doSyncProductionEmploymentHistory(topLimit = 5, trigger = 'manual
       errors: errors
     });
 
-    runSingleTableReconciliation('employmenthistory').catch(err => console.error('EmploymentHistory background recon failed:', err.message));
+    runSingleTableReconciliation('employmenthistory', isProduction, bubbleBase).catch(err => console.error('EmploymentHistory background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
   } finally {
     if (pool) await pool.close();
@@ -3196,6 +3219,7 @@ async function doSyncProductionEmploymentHistory(topLimit = 5, trigger = 'manual
 
 // ─── doSyncAudits ─────────────────────────────────────────────────────────────
 async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
+  const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   console.log(`[doSyncAudits] Called [devRun=${devRun}] [topLimit=${topLimit}] [customIds=${customIds ? customIds.length : null}]`);
   let pool;
   try {
@@ -3509,6 +3533,7 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
 }
 
 async function doSyncProductionAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
+  const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   console.log(`[doSyncProductionAudits] Called [devRun=${devRun}] [topLimit=${topLimit}] [customIds=${customIds ? customIds.length : null}]`);
   let pool;
   let syncId;
@@ -3680,7 +3705,7 @@ async function doSyncProductionAudits(topLimit = 5, trigger = 'manual', bubbleBa
       errors: errors
     });
 
-    runSingleTableReconciliation('audits').catch(err => console.error('Audits background recon failed:', err.message));
+    runSingleTableReconciliation('audits', isProduction, bubbleBase).catch(err => console.error('Audits background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
   } finally {
     if (syncId) unregisterSync(syncId);
@@ -4455,8 +4480,8 @@ const ACCEPTED_MISMATCHES = {
 
 // Live counts cache
 let LIVE_COUNTS_CACHE = {
-  data: null,
-  expiresAt: 0
+  dev: { data: null, expiresAt: 0 },
+  prod: { data: null, expiresAt: 0 }
 };
 const CACHE_TTL_MS = 60000; // 60 seconds
 
@@ -4791,10 +4816,16 @@ async function fetchLiveCounts(bubbleBase, bubbleToken) {
           signal: AbortSignal.timeout(4000)
         });
         if (res.ok) {
+          const contentType = res.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Bubble API returned non-JSON — check environment config/credentials');
+          }
           const data = await res.json();
           if (data.response) {
             counts[key].bubble = (data.response.count || 0) + (data.response.remaining || 0);
           }
+        } else {
+          throw new Error(`HTTP ${res.status}`);
         }
       } catch (err) {
         console.warn(`Failed to fetch Bubble count for ${key}:`, err.message);
@@ -4809,14 +4840,20 @@ async function fetchLiveCounts(bubbleBase, bubbleToken) {
   return success ? counts : null;
 }
 
-async function downloadBubbleCache(id) {
+async function downloadBubbleCache(id, isProduction = false, bubbleBase = null, bubbleToken = null) {
   const tableConfig = RECON_CONFIG[id];
   if (!tableConfig) return;
   
   const typeName = tableConfig.bubbleTable;
-  const cachePath = path.join('D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment', tableConfig.cacheFile);
+  const env = isProduction ? 'prod' : 'dev';
+  const cacheFile = tableConfig.cacheFile.replace('.json', `.${env}.json`);
+  const cachePath = path.join('D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment', cacheFile);
   
-  console.log(`[Reconciliation] Downloading Bubble cache for ${id} (${typeName}) in background...`);
+  const creds = getBubbleCredentials(isProduction, bubbleBase);
+  const finalBase = bubbleBase || creds.base;
+  const finalToken = bubbleToken || creds.token;
+  
+  console.log(`[Reconciliation] Downloading Bubble cache for ${id} (${typeName}) in background [Env: ${env}]...`);
   
   const allRecords = [];
   let cursor = 0;
@@ -4831,9 +4868,9 @@ async function downloadBubbleCache(id) {
         let attempt = 0;
         while (attempt < 5) {
           try {
-            const url = `${DEFAULT_BUBBLE_BASE}obj/${typeName}?limit=100&cursor=${cur}`;
+            const url = `${finalBase}obj/${typeName}?limit=100&cursor=${cur}`;
             const res = await fetch(url, { 
-              headers: { Authorization: `Bearer ${bubbleToken}` },
+              headers: { Authorization: `Bearer ${finalToken}` },
               signal: AbortSignal.timeout(15000)
             });
             if (res.status === 429) {
@@ -4842,6 +4879,10 @@ async function downloadBubbleCache(id) {
               continue;
             }
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const contentType = res.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+              throw new Error('Bubble API returned non-JSON — check environment config/credentials');
+            }
             const data = await res.json();
             return data.response;
           } catch (err) {
@@ -4892,28 +4933,32 @@ async function downloadBubbleCache(id) {
 
 const reconciliationLocks = {};
 
-async function runSingleTableReconciliation(id) {
+async function runSingleTableReconciliation(id, isProduction = false, bubbleBase = null, bubbleToken = null) {
   if (!RECON_CONFIG[id]) return;
-  if (reconciliationLocks[id]) {
-    console.log(`[Reconciliation] Single-table run for ${id} is already in progress.`);
+  
+  const env = isProduction ? 'prod' : 'dev';
+  const lockKey = `${id}_${env}`;
+  if (reconciliationLocks[lockKey]) {
+    console.log(`[Reconciliation] Single-table run for ${id} (${env}) is already in progress.`);
     return;
   }
 
-  reconciliationLocks[id] = true;
-  console.log(`[Reconciliation] Starting background single-table check for: ${id}`);
+  reconciliationLocks[lockKey] = true;
+  console.log(`[Reconciliation] Starting background single-table check for: ${id} (${env})`);
 
   try {
     const tableConfig = RECON_CONFIG[id];
-    const cachePath = path.join('D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment', tableConfig.cacheFile);
+    const cacheFile = tableConfig.cacheFile.replace('.json', `.${env}.json`);
+    const cachePath = path.join('D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment', cacheFile);
 
     if (!fs.existsSync(cachePath) || (Date.now() - fs.statSync(cachePath).mtimeMs > 24 * 3600000)) {
       console.log(`[Reconciliation] Cache file for ${id} is missing or stale. Triggering download first...`);
-      await downloadBubbleCache(id);
+      await downloadBubbleCache(id, isProduction, bubbleBase, bubbleToken);
     }
 
     if (!fs.existsSync(cachePath)) {
       console.warn(`[Reconciliation] Cache file still not found for ${id}: ${cachePath}`);
-      reconciliationLocks[id] = false;
+      reconciliationLocks[lockKey] = false;
       return;
     }
 
@@ -5021,20 +5066,23 @@ async function runSingleTableReconciliation(id) {
       discrepancy_ids: discrepancyIds
     };
 
-    const statsPath = path.join(__dirname, `stats_${id}.json`);
+    const statsPath = path.join(__dirname, `stats_${id}.${env}.json`);
     fs.writeFileSync(statsPath, JSON.stringify(stats, null, 2), 'utf8');
-    console.log(`[Reconciliation] Successfully saved stats for ${id} to ${statsPath}`);
+    console.log(`[Reconciliation] Successfully saved stats for ${id} (${env}) to ${statsPath}`);
   } catch (err) {
     console.error(`[Reconciliation] Error running background single-table check for ${id}:`, err.stack);
   } finally {
-    reconciliationLocks[id] = false;
+    reconciliationLocks[lockKey] = false;
   }
 }
 
 app.get('/dashboard/reconciliation-summary', async (req, res) => {
   const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
-  const isDevVersion = bubbleBase.includes('/version-test/');
-  const syncConfigIdsList = getSyncConfigIds(!isDevVersion);
+  const isProduction = req.headers['x-environment'] === 'production' || !bubbleBase.includes('/version-test/');
+  const env = isProduction ? 'prod' : 'dev';
+  const syncConfigIdsList = getSyncConfigIds(isProduction);
+  const creds = getBubbleCredentials(isProduction, bubbleBase);
+  const activeToken = creds.token;
 
   const entityIds = ['firms', 'banks', 'practitioners', 'practitionersadm', 'employmenthistory', 'audits', 'applications', 'certificates'];
   const entityLabels = {
@@ -5098,7 +5146,7 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
   let parsedFromMds = false;
 
   idsToLoad.forEach(id => {
-    const statsPath = path.join(__dirname, `stats_${id}.json`);
+    const statsPath = path.join(__dirname, `stats_${id}.${env}.json`);
     if (fs.existsSync(statsPath)) {
       try {
         const stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
@@ -5112,7 +5160,7 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
         tableStats[id].lastReconciledTime = stats.lastReconciledTime;
         tableStats[id].discrepancy_ids = stats.discrepancy_ids || {};
       } catch (e) {
-        console.error(`Error loading stats JSON for ${id}:`, e.message);
+        console.error(`Error loading stats JSON for ${id} (${env}):`, e.message);
       }
     } else {
       parsedFromMds = true;
@@ -5120,7 +5168,7 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
   });
 
   if (parsedFromMds) {
-    console.log('[Reconciliation] Some JSON stats files missing, parsing MD reports as fallback migration...');
+    console.log(`[Reconciliation] Some JSON stats files missing for env ${env}, parsing MD reports as fallback migration...`);
     const reportPath = 'D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment\\reconciliation_summary_report.md';
     const ehReportPath = 'D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment\\EmploymentHistory\\employment_history_reconciliation_findings_report.md';
 
@@ -5168,7 +5216,7 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
                 tableStats[id].fieldMismatches = stats.fieldMismatches;
                 tableStats[id].lastReconciledTime = stats.lastReconciledTime;
 
-                fs.writeFileSync(path.join(__dirname, `stats_${id}.json`), JSON.stringify(stats, null, 2), 'utf8');
+                fs.writeFileSync(path.join(__dirname, `stats_${id}.${env}.json`), JSON.stringify(stats, null, 2), 'utf8');
               }
             }
           }
@@ -5224,7 +5272,7 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
         tableStats['employmenthistory'].fieldMismatches = stats.fieldMismatches;
         tableStats['employmenthistory'].lastReconciledTime = stats.lastReconciledTime;
 
-        fs.writeFileSync(path.join(__dirname, 'stats_employmenthistory.json'), JSON.stringify(stats, null, 2), 'utf8');
+        fs.writeFileSync(path.join(__dirname, `stats_employmenthistory.${env}.json`), JSON.stringify(stats, null, 2), 'utf8');
       }
     } catch (err) {
       console.error('Error migrating EH report:', err.message);
@@ -5239,10 +5287,14 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
       if (table === 'employmenthistory') configKey = 'employmentHistory';
       const url = `${bubbleBase}obj/syncconfig/${syncConfigIdsList[configKey]}`;
       const configRes = await fetch(url, {
-        headers: { Authorization: `Bearer ${bubbleToken}` },
+        headers: { Authorization: `Bearer ${activeToken}` },
         signal: AbortSignal.timeout(3000)
       });
       if (configRes.ok) {
+        const contentType = configRes.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error('Bubble API returned non-JSON — check environment config/credentials');
+        }
         const data = await configRes.json();
         return { table, lastSyncTime: data.response?.LastSyncTime || null };
       }
@@ -5269,16 +5321,19 @@ app.get('/dashboard/reconciliation-summary', async (req, res) => {
 
   // Get dynamic live counts (using TTL cache)
   let counts = null;
-  if (LIVE_COUNTS_CACHE.data && Date.now() < LIVE_COUNTS_CACHE.expiresAt) {
-    counts = LIVE_COUNTS_CACHE.data;
+  const cacheObj = LIVE_COUNTS_CACHE[env] || { data: null, expiresAt: 0 };
+  
+  if (cacheObj.data && Date.now() < cacheObj.expiresAt) {
+    counts = cacheObj.data;
   } else {
-    const fetched = await fetchLiveCounts(bubbleBase, bubbleToken);
+    const fetched = await fetchLiveCounts(bubbleBase, activeToken);
     if (fetched) {
       counts = fetched;
-      LIVE_COUNTS_CACHE.data = fetched;
-      LIVE_COUNTS_CACHE.expiresAt = Date.now() + CACHE_TTL_MS;
+      cacheObj.data = fetched;
+      cacheObj.expiresAt = Date.now() + CACHE_TTL_MS;
+      LIVE_COUNTS_CACHE[env] = cacheObj;
     } else {
-      counts = LIVE_COUNTS_CACHE.data || {
+      counts = cacheObj.data || {
         firms: { sql: 0, bubble: 0 },
         banks: { sql: 0, bubble: 0 },
         practitioners: { sql: 0, bubble: 0 },
@@ -5375,62 +5430,44 @@ app.post('/dashboard/reconciliation/run', (req, res) => {
   isReconciliationRunning = true;
   reconciliationProgress = 'Starting reconciliation...';
 
-  const { spawn } = require('child_process');
-  const scriptPath = path.join(__dirname, 'scratch_reconcile_five_tables.js');
-  const ehScriptPath = path.join(__dirname, 'scratch_reconcile_eh_production.js');
+  const isProduction = req.headers['x-environment'] === 'production';
+  const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
 
-  console.log(`[Reconciliation] Spawning background job: ${scriptPath}`);
-  const child = spawn('node', [scriptPath], { cwd: __dirname });
+  // Run reconciliation in the background asynchronously
+  (async () => {
+    try {
+      const entities = ['firms', 'banks', 'practitioners', 'practitionersadm', 'employmenthistory', 'audits', 'applications', 'certificates'];
+      const labels = {
+        firms: 'Firms',
+        banks: 'Banks',
+        practitioners: 'Practitioners',
+        practitionersadm: 'Practitioners Admissions',
+        employmenthistory: 'Employment History',
+        audits: 'Audits',
+        applications: 'Applications',
+        certificates: 'Certificates'
+      };
 
-  child.stdout.on('data', (data) => {
-    console.log(`[Reconciliation stdout] ${data}`);
-    reconciliationProgress = data.toString();
-  });
+      for (const id of entities) {
+        reconciliationProgress = `Reconciling ${labels[id]}...`;
+        console.log(`[Reconciliation] Running reconciliation for ${id} (isProduction=${isProduction})`);
+        await runSingleTableReconciliation(id, isProduction, bubbleBase);
+      }
 
-  child.stderr.on('data', (data) => {
-    console.error(`[Reconciliation stderr] ${data}`);
-  });
-
-  child.on('close', (code) => {
-    console.log(`[Reconciliation] Five tables script exited with code ${code}`);
-    reconciliationProgress = 'Five tables finished. Running Employment History reconciliation...';
-
-    console.log(`[Reconciliation] Spawning background job: ${ehScriptPath}`);
-    const ehChild = spawn('node', [ehScriptPath], { cwd: __dirname });
-
-    ehChild.stdout.on('data', (data) => {
-      console.log(`[EH Reconciliation stdout] ${data}`);
-      reconciliationProgress = data.toString();
-    });
-
-    ehChild.stderr.on('data', (data) => {
-      console.error(`[EH Reconciliation stderr] ${data}`);
-    });
-
-    ehChild.on('close', (ehCode) => {
-      console.log(`[Reconciliation] EH script exited with code ${ehCode}`);
-
-      Promise.all([
-        runSingleTableReconciliation('firms'),
-        runSingleTableReconciliation('banks'),
-        runSingleTableReconciliation('practitioners'),
-        runSingleTableReconciliation('practitionersadm'),
-        runSingleTableReconciliation('employmenthistory'),
-        runSingleTableReconciliation('audits'),
-        runSingleTableReconciliation('applications'),
-        runSingleTableReconciliation('certificates')
-      ]).then(() => {
-        console.log('[Reconciliation] All stats JSON files regenerated successfully.');
-        LIVE_COUNTS_CACHE.expiresAt = 0; // Invalidate cache
-        isReconciliationRunning = false;
-        reconciliationProgress = 'Reconciliation completed successfully.';
-      }).catch(err => {
-        console.error('[Reconciliation] Stats JSON regeneration failed:', err.message);
-        isReconciliationRunning = false;
-        reconciliationProgress = 'Reconciliation completed successfully.';
-      });
-    });
-  });
+      console.log('[Reconciliation] All stats JSON files regenerated successfully.');
+      
+      const env = isProduction ? 'prod' : 'dev';
+      if (LIVE_COUNTS_CACHE[env]) {
+        LIVE_COUNTS_CACHE[env].expiresAt = 0; // Invalidate cache
+      }
+      reconciliationProgress = 'Reconciliation completed successfully.';
+    } catch (err) {
+      console.error('[Reconciliation] Stats JSON regeneration failed:', err.message);
+      reconciliationProgress = `Reconciliation failed: ${err.message}`;
+    } finally {
+      isReconciliationRunning = false;
+    }
+  })();
 
   res.json({ success: true, message: 'Reconciliation run started in background' });
 });
@@ -5934,6 +5971,7 @@ function shouldStopImportsSync(table) {
 
 // ─── doSyncApplications ──────────────────────────────────────────────────────
 async function doSyncApplications(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, isProduction = false, year = null, customIds = null, source = 'production') {
+  const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   const table = 'applications';
   const syncId = 'imports_' + table + '_' + Date.now();
   console.log(`[doSyncApplications] Called [topLimit=${topLimit}] [trigger=${trigger}] [year=${year}] [customIds=${customIds ? customIds.length : null}] [source=${source}]`);
@@ -6193,7 +6231,7 @@ async function doSyncApplications(topLimit = 5, trigger = 'manual', bubbleBase =
 
     unregisterImportsSync(table);
     LIVE_COUNTS_CACHE.expiresAt = 0;
-    runSingleTableReconciliation('applications').catch(err => console.error('[Reconciliation] Applications background recon failed:', err.message));
+    runSingleTableReconciliation('applications', isProduction, bubbleBase).catch(err => console.error('[Reconciliation] Applications background recon failed:', err.message));
     return { success: errors === 0, synced: success, total: records.length, errors };
 
   } catch (err) {
@@ -6219,6 +6257,7 @@ async function doSyncApplications(topLimit = 5, trigger = 'manual', bubbleBase =
 
 // ─── doSyncCertificates ──────────────────────────────────────────────────────
 async function doSyncCertificates(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, isProduction = false, year = null, options = {}, customIds = null, source = 'production') {
+  const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   const table = 'certificates';
   const syncId = 'imports_' + table + '_' + Date.now();
   console.log(`[doSyncCertificates] Called [topLimit=${topLimit}] [trigger=${trigger}] [year=${year}] [options=${JSON.stringify(options)}] [customIds=${customIds ? customIds.length : null}] [source=${source}]`);
@@ -6489,7 +6528,7 @@ async function doSyncCertificates(topLimit = 5, trigger = 'manual', bubbleBase =
 
     unregisterImportsSync(table);
     LIVE_COUNTS_CACHE.expiresAt = 0;
-    runSingleTableReconciliation('certificates').catch(err => console.error('[Reconciliation] Certificates background recon failed:', err.message));
+    runSingleTableReconciliation('certificates', isProduction, bubbleBase).catch(err => console.error('[Reconciliation] Certificates background recon failed:', err.message));
     return { success: errors === 0, synced: success, total: records.length, errors };
 
   } catch (err) {
@@ -6655,6 +6694,46 @@ function sendProgress(table, data) {
 
   console.log(`[SSE] ✓ Sent to ${table}: ${data.message || data.status || 'update'} (${sseClients[table].length} client(s))`);
 }
+
+function migrateLegacyFiles() {
+  console.log('[Migration] Checking for legacy non-environment-tagged stats and cache files...');
+  try {
+    const files = fs.readdirSync(__dirname);
+    files.forEach(file => {
+      if (file.startsWith('stats_') && file.endsWith('.json') && !file.endsWith('.dev.json') && !file.endsWith('.prod.json')) {
+        const id = file.slice(6, -5);
+        const legacyPath = path.join(__dirname, file);
+        const newPath = path.join(__dirname, `stats_${id}.prod.json`);
+        
+        if (fs.existsSync(legacyPath) && !fs.existsSync(newPath)) {
+          fs.copyFileSync(legacyPath, newPath);
+          console.log(`[Migration] Backfilled legacy stats: ${file} → stats_${id}.prod.json`);
+        }
+      }
+    });
+
+    const cacheDir = 'D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment';
+    if (fs.existsSync(cacheDir)) {
+      const cacheFiles = fs.readdirSync(cacheDir);
+      cacheFiles.forEach(file => {
+        if (file.startsWith('.cache_') && file.endsWith('.json') && !file.endsWith('.dev.json') && !file.endsWith('.prod.json')) {
+          const legacyPath = path.join(cacheDir, file);
+          const newName = file.replace('.json', '.prod.json');
+          const newPath = path.join(cacheDir, newName);
+          
+          if (fs.existsSync(legacyPath) && !fs.existsSync(newPath)) {
+            fs.copyFileSync(legacyPath, newPath);
+            console.log(`[Migration] Backfilled legacy cache: ${file} → ${newName}`);
+          }
+        }
+      });
+    }
+  } catch (err) {
+    console.error('[Migration] Error during legacy file backfilling:', err.message);
+  }
+}
+
+migrateLegacyFiles();
 
 app.listen(3000, '0.0.0.0', () => {
   if (masterSequentialTimer) { clearInterval(masterSequentialTimer); masterSequentialTimer = null; }

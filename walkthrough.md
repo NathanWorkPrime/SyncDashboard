@@ -17,11 +17,12 @@ All changes to make the Reconciliation and Caching system environment-aware and 
   - Updated `runSingleTableReconciliation` to maintain separate lock states per environment (`lockKey = id_env`), allowing DEV and PROD checks to run independently without clashing.
 - **Counts Cache**: Namespaced `LIVE_COUNTS_CACHE` into `LIVE_COUNTS_CACHE.dev` and `LIVE_COUNTS_CACHE.prod` so DEV and PROD counts are cached separately. Switching environments automatically reads from the correct cache.
 
-## 3. UI Environment Indicator
-- Added a prominent environment tag in the "Data Status" transparency note banner:
-  - **`Bubble Environment: Development`** (styled in orange/amber)
-  - **`Bubble Environment: Production`** (styled in green)
-- Clicking the `DEV`/`PROD` toggle in the settings or navigation instantly updates the banner and reloads the active dashboard tab with that environment's namespaced data.
+## 3. UI Environment Indicator & Page-Level Toggle
+- Replaced the static environment banner in the "Data Status" transparency note card with an **interactive, page-level DEV/PROD environment toggle**:
+  - Highlights the active environment in **Amber/Orange** (for DEV) or **Green** (for PROD) with modern pill styles.
+  - Clicking `DEV` or `PROD` on the dashboard page triggers `switchEnvironment(env)`, reloading the cached namespaced counts and stats instantly without requiring a full reconciliation run.
+  - Automatically synchronizes with the top navigation environment badge and Settings fields so all controls remain in perfect sync.
+  - Selected environment persists across page refreshes via `localStorage`.
 
 ## 4. Startup Migration & Backfilling
 - Added a startup routine `migrateLegacyFiles()` in [server.js](file:///d:/Antigravity/LPFF%20Sync%201/server.js).
@@ -31,9 +32,12 @@ All changes to make the Reconciliation and Caching system environment-aware and 
 
 ### Verification and Screenshots
 
-#### Completed Reconciliation in PROD Mode (showing Production environment indicator)
+#### Page-Level Bubble Environment Toggle (PROD Mode Active)
+![Page-Level Environment Toggle](reconciliation_docs/dashboard_prod_mode.png)
+
+#### Completed Reconciliation in PROD Mode
 ![PROD Reconciliation Complete](reconciliation_docs/prod_reconciliation_complete_1786603966753.png)
 
 #### Live Verification Video
-The browser session video demonstrating toggling DEV/PROD, the dynamic environment indicator, and background reconciliation is saved at:
+The browser session video demonstrating page-level toggling between DEV/PROD, immediate update of the topbar badge, instant reload of namespaced stats/counts, and persistence across refreshes is saved at:
 ![Live Verification Recording](reconciliation_docs/verify_env_awareness_1786603559100.webp)

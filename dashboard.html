@@ -1840,8 +1840,17 @@
 
   <div class="page-body">
     <!-- Data Status Note -->
-    <div class="transparency-note" id="live-transparency-banner" style="margin-bottom: 20px; background: var(--blue-light); border-left: 4px solid var(--blue); padding: 14px 18px; border-radius: var(--radius-md); font-size: 13px; color: var(--text-2); line-height: 1.5; box-shadow: var(--shadow-sm);">
-      <strong>ℹ️ Data Status:</strong> Last Reconciled: <span id="banner-reconciled-time">—</span>. Comparison data reflects the most recent reconciliation run — click Reconcile Now to run a fresh check.
+    <div class="transparency-note" id="live-transparency-banner" style="margin-bottom: 20px; background: var(--blue-light); border-left: 4px solid var(--blue); padding: 14px 18px; border-radius: var(--radius-md); font-size: 13px; color: var(--text-2); line-height: 1.5; box-shadow: var(--shadow-sm); display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;">
+      <div>
+        <strong>ℹ️ Data Status:</strong> Last Reconciled: <span id="banner-reconciled-time">—</span>. Comparison data reflects the most recent reconciliation run — click Reconcile Now to run a fresh check.
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-weight: bold; color: var(--text-1);">Bubble Environment:</span>
+        <div class="env-toggle-pill" style="display: inline-flex; background: var(--border); border-radius: 20px; padding: 2px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);">
+          <button id="toggle-btn-dev" onclick="switchEnvironment('dev')" style="border: none; background: transparent; padding: 4px 12px; border-radius: 18px; font-size: 11px; font-weight: 700; cursor: pointer; color: var(--text-muted); transition: all 0.2s ease;">DEV</button>
+          <button id="toggle-btn-prod" onclick="switchEnvironment('prod')" style="border: none; background: transparent; padding: 4px 12px; border-radius: 18px; font-size: 11px; font-weight: 700; cursor: pointer; color: var(--text-muted); transition: all 0.2s ease;">PROD</button>
+        </div>
+      </div>
     </div>
 
     <!-- KPIs -->
@@ -4987,6 +4996,12 @@ function loadEnvironments() {
   if (saved) environments = JSON.parse(saved);
   var ae = localStorage.getItem('activeEnv');
   if (ae) activeEnv = ae;
+
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    if (environments.dev.serverUrl.indexOf('102.130.122.57') !== -1) environments.dev.serverUrl = window.location.origin;
+    if (environments.prod.serverUrl.indexOf('102.130.122.57') !== -1) environments.prod.serverUrl = window.location.origin;
+    if (settings.serverUrl.indexOf('102.130.122.57') !== -1) settings.serverUrl = window.location.origin;
+  }
 }
 
 function switchEnvironment(env) {
@@ -5033,6 +5048,9 @@ function switchEnvironment(env) {
   cachedErrors = [];
   loadOverviewStats();
   loadErrors(true);
+  if (document.getElementById('page-live-dashboard') && document.getElementById('page-live-dashboard').classList.contains('active')) {
+    loadLiveDashboard();
+  }
   if (document.getElementById('page-settings').classList.contains('active')) {
     loadSqlTableInfo();
     loadConnectionInfo();
@@ -5067,6 +5085,23 @@ function updateEnvUI() {
   var prodBtn = document.getElementById('env-btn-prod');
   if (devBtn)  devBtn.className  = 'btn btn-sm ' + (isDev  ? 'btn-amber'   : 'btn-secondary');
   if (prodBtn) prodBtn.className = 'btn btn-sm ' + (!isDev ? 'btn-success' : 'btn-secondary');
+
+  // page-level toggle button highlight
+  var pageDevBtn  = document.getElementById('toggle-btn-dev');
+  var pageProdBtn = document.getElementById('toggle-btn-prod');
+  if (pageDevBtn && pageProdBtn) {
+    if (isDev) {
+      pageDevBtn.style.background = '#d97706';
+      pageDevBtn.style.color = '#ffffff';
+      pageProdBtn.style.background = 'transparent';
+      pageProdBtn.style.color = 'var(--text-muted)';
+    } else {
+      pageDevBtn.style.background = 'transparent';
+      pageDevBtn.style.color = 'var(--text-muted)';
+      pageProdBtn.style.background = '#059669';
+      pageProdBtn.style.color = '#ffffff';
+    }
+  }
 }
 
 function testConnection() {
@@ -6299,8 +6334,18 @@ async function loadLiveDashboard() {
   
   try {
     const res = await fetch(settings.serverUrl + '/dashboard/reconciliation-summary', {
-      headers: { 'x-bubble-base-url': settings.bubbleBaseUrl }
+      headers: {
+        'x-bubble-base-url': settings.bubbleBaseUrl,
+        'x-environment': activeEnv === 'prod' ? 'production' : 'development'
+      }
     });
+    
+    const contentType = res.headers.get('content-type');
+    if (!res.ok || !contentType || !contentType.includes('application/json')) {
+      const errorText = await res.text();
+      throw new Error(`Server returned non-JSON (${res.status}): ${errorText.substring(0, 150) || res.statusText}`);
+    }
+    
     const data = await res.json();
     
     if (!data.success) {
@@ -6530,7 +6575,19 @@ function pollReconciliationStatus() {
   
   reconPollInterval = setInterval(async () => {
     try {
-      const res = await fetch(settings.serverUrl + '/dashboard/reconciliation-summary');
+      const res = await fetch(settings.serverUrl + '/dashboard/reconciliation-summary', {
+        headers: {
+          'x-bubble-base-url': settings.bubbleBaseUrl,
+          'x-environment': activeEnv === 'prod' ? 'production' : 'development'
+        }
+      });
+      
+      const contentType = res.headers.get('content-type');
+      if (!res.ok || !contentType || !contentType.includes('application/json')) {
+        const errorText = await res.text();
+        throw new Error(`Server returned non-JSON (${res.status}): ${errorText.substring(0, 150) || res.statusText}`);
+      }
+      
       const data = await res.json();
       
       if (progressText && data.reconciliationProgress) {
