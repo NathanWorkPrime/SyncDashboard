@@ -4509,9 +4509,9 @@ const RECON_CONFIG = {
   banks: {
     cacheFile: '.cache_lpff.bankaccounts.view.json',
     bubbleTable: 'lpff.bankaccounts.view',
-    sqlQuery: `SELECT ba.Id as bank_id, ba.AccountNumber as account_number, ba.Frwk_InactiveFlag as inactive, org.Aff_FirmNo as firm_number
-               FROM dbo.Core_BankAccounts ba
-               LEFT JOIN dbo.Core_Organisations org ON ba.Aff_FirmId = org.Id`,
+    sqlQuery: `SELECT Id as bank_id, AccountNumber as account_number, AFF_StatusLkp as inactive, Aff_FirmNo as firm_number
+               FROM dbo.vw_AFF_TrustBankAccountModel
+               WHERE Id IS NOT NULL`,
     getSqlKey: r => String(r.bank_id || '').trim().toLowerCase(),
     getBubbleKey: r => String(r['Id'] || r['id'] || '').trim().toLowerCase(),
     checkDiffs: (s, b) => {
@@ -4519,11 +4519,13 @@ const RECON_CONFIG = {
       if (normalizeString(s.account_number) !== normalizeString(b['Account Number'])) {
         diffs.push('AccountNumber');
       }
-      if (normalizeString(s.firm_number) !== normalizeString(b['Allocated Firm Number'])) {
+      const bFirmNo = b['Allocated Firm Number'] || b['Firm Number'] || '';
+      if (normalizeString(s.firm_number) !== normalizeString(bFirmNo)) {
         diffs.push('FirmNumber');
       }
       
-      const isSqlInactive = normalizeBoolean(s.inactive);
+      // AFF_StatusLkp: 2 is inactive, 0 or 1 is active
+      const isSqlInactive = (Number(s.inactive) === 2);
       let isBubbleInactive = false;
       const bFlag = String(b['inactiveflag'] || '').trim().toLowerCase();
       if (bFlag === 'inactive' || bFlag === 'true' || bFlag === '1' || bFlag === 'yes') {
@@ -4772,7 +4774,7 @@ async function fetchLiveCounts(bubbleBase, bubbleToken) {
     const pool = await getDashboardPool();
     const [firmsRes, banksRes, pracsRes, ehRes, auditsRes, appRes, certRes] = await Promise.all([
       pool.query("SELECT COUNT(*) AS count FROM dbo.Core_Organisations WHERE Frwk_Discriminator = 'Aff.Firm'"),
-      pool.query("SELECT COUNT(*) AS count FROM dbo.Core_BankAccounts"),
+      pool.query("SELECT COUNT(*) AS count FROM dbo.vw_AFF_TrustBankAccountModel WHERE Id IS NOT NULL"),
       pool.query("SELECT COUNT(*) AS count FROM dbo.Core_Persons WHERE Frwk_Discriminator = 'Aff.Practitioner'"),
       pool.query("SELECT COUNT(*) AS count FROM dbo.Core_Organisation_Persons WHERE Frwk_Discriminator = 'Aff.FirmPractitioner'"),
       pool.query("SELECT COUNT(*) AS count FROM dbo.Aff_FirmFinancialYears"),
