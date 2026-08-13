@@ -4500,7 +4500,7 @@ const RECON_CONFIG = {
       if (normalizeString(s.name) !== normalizeString(b['Firm Name'] || b.Name)) {
         diffs.push('Name');
       }
-      if (normalizeBoolean(s.inactive) !== normalizeBoolean(b.Inactive)) {
+      if (normalizeBoolean(s.inactive) !== normalizeBoolean(b['Inactive Flag'])) {
         diffs.push('Inactive');
       }
       return diffs;
@@ -4519,12 +4519,20 @@ const RECON_CONFIG = {
       if (normalizeString(s.account_number) !== normalizeString(b['Account Number'])) {
         diffs.push('AccountNumber');
       }
-      if (normalizeString(s.firm_number) !== normalizeString(b['Firm Number'])) {
+      if (normalizeString(s.firm_number) !== normalizeString(b['Allocated Firm Number'])) {
         diffs.push('FirmNumber');
       }
-      if (normalizeBoolean(s.inactive) !== normalizeBoolean(b.Inactive)) {
+      
+      const isSqlInactive = normalizeBoolean(s.inactive);
+      let isBubbleInactive = false;
+      const bFlag = String(b['inactiveflag'] || '').trim().toLowerCase();
+      if (bFlag === 'inactive' || bFlag === 'true' || bFlag === '1' || bFlag === 'yes') {
+        isBubbleInactive = true;
+      }
+      if (isSqlInactive !== isBubbleInactive) {
         diffs.push('Inactive');
       }
+      
       return diffs;
     }
   },
@@ -4541,7 +4549,7 @@ const RECON_CONFIG = {
       if (normalizeString(s.name) !== normalizeString(b['Practitioner Name'] || b['Full Name'])) {
         diffs.push('Name');
       }
-      if (normalizeBoolean(s.inactive) !== normalizeBoolean(b.Inactive)) {
+      if (normalizeBoolean(s.inactive) !== normalizeBoolean(b['Inactive Flag'])) {
         diffs.push('Inactive');
       }
       return diffs;
@@ -4560,7 +4568,7 @@ const RECON_CONFIG = {
     checkDiffs: (s, b) => {
       const diffs = [];
       if (normalizeBoolean(s.attorney) !== normalizeBoolean(b.Attorney)) diffs.push('Attorney');
-      if (normalizeBoolean(s.conveyancer) !== normalizeBoolean(b.Conveyancer)) diffs.push('Conveyancer');
+      if (normalizeBoolean(s.conveyancer) !== normalizeBoolean(b['Conveyencer'])) diffs.push('Conveyancer');
       if (normalizeBoolean(s.notary) !== normalizeBoolean(b.Notary)) diffs.push('Notary');
       if (normalizeBoolean(s.advocate) !== normalizeBoolean(b.Advocate)) diffs.push('Advocate');
       return diffs;
@@ -4590,9 +4598,9 @@ const RECON_CONFIG = {
     getBubbleKey: r => String(r.id || '').trim().toLowerCase(),
     checkDiffs: (s, b) => {
       const diffs = [];
-      if (normalizeString(s.memno) !== normalizeString(b.practitioner_number)) diffs.push('PractitionerNumber');
-      if (normalizeString(s.firmno) !== normalizeString(b.firm_number)) diffs.push('FirmNumber');
-      if (normalizeBoolean(s.inactive) !== normalizeBoolean(b.inactive)) diffs.push('Inactive');
+      if (normalizeString(s.memno) !== normalizeString(b['Practitioner Number'])) diffs.push('PractitionerNumber');
+      if (normalizeString(s.firmno) !== normalizeString(b['Firm Number'])) diffs.push('FirmNumber');
+      if (normalizeBoolean(s.inactive) !== normalizeBoolean(b['Inactive'])) diffs.push('Inactive');
       return diffs;
     }
   },
@@ -4607,7 +4615,7 @@ const RECON_CONFIG = {
       const diffs = [];
       if (normalizeString(s.firm_number) !== normalizeString(b['Firm No.'])) diffs.push('FirmNo');
       if (normalizeString(s.Year) !== normalizeString(b['Year'])) diffs.push('Year');
-      if (normalizeBoolean(s.inactive) !== normalizeBoolean(b.Inactive)) diffs.push('Inactive');
+      if (normalizeBoolean(s.inactive) !== normalizeBoolean(b['Inactive Flag'])) diffs.push('Inactive');
       return diffs;
     }
   },
@@ -4694,10 +4702,10 @@ function computeTableHealth(id, sqlCount, bubbleCount, missingInBubble, missingI
   const missingInBubblePct = (missingInBubble || 0) / total;
   const missingInSQLPct = (missingInSQL || 0) / total;
 
-  if (missingInBubblePct > 0.01 || missingInSQLPct > 0.01) {
+  if (missingInBubblePct > 0.05 || missingInSQLPct > 0.05) {
     return 'Critical';
   }
-  if (missingInBubblePct > 0.002 || missingInSQLPct > 0.002) {
+  if (missingInBubblePct > 0.015 || missingInSQLPct > 0.015) {
     return 'Warning';
   }
 
