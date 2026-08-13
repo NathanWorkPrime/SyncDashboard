@@ -6,7 +6,7 @@
   "missingInBubble": 1152,
   "missingInSQL": 113,
   "fieldMismatches": 340,
-  "lastReconciledTime": "2026-08-13T09:31:12.887Z",
+  "lastReconciledTime": "2026-08-13T11:42:26.050Z",
   "discrepancy_ids": {
     "Missing in Bubble": [
       "24670",
@@ -4364,5 +4364,11 @@
       "5694744414",
       "132576"
     ]
+  },
+  "integrity_issues": {
+    "Active Firm with no Firm Number": {
+      "count": 0,
+      "ids": []
+    }
   }
 }

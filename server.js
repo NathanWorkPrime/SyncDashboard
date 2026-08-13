@@ -4495,6 +4495,13 @@ const RECON_CONFIG = {
                WHERE Frwk_Discriminator = 'Aff.Firm'`,
     getSqlKey: r => String(r.firm_number || '').trim(),
     getBubbleKey: r => String(r['Firm Number'] || '').trim(),
+    integrityRules: [
+      {
+        name: "Active Firm with no Firm Number",
+        query: `SELECT Id FROM dbo.Core_Organisations 
+                WHERE Frwk_Discriminator = 'Aff.Firm' AND Frwk_InactiveFlag = 0 AND (Aff_FirmNo IS NULL OR LTRIM(RTRIM(Aff_FirmNo)) = '')`
+      }
+    ],
     checkDiffs: (s, b) => {
       const diffs = [];
       if (normalizeString(s.name) !== normalizeString(b['Firm Name'] || b.Name)) {
@@ -4553,6 +4560,13 @@ const RECON_CONFIG = {
                WHERE Frwk_Discriminator = 'Aff.Practitioner'`,
     getSqlKey: r => String(r.practitioner_number || '').trim(),
     getBubbleKey: r => String(r['Practitioner Number'] || '').trim(),
+    integrityRules: [
+      {
+        name: "Active Practitioner with no Practitioner Number",
+        query: `SELECT Id FROM dbo.Core_Persons 
+                WHERE Frwk_Discriminator = 'Aff.Practitioner' AND Frwk_InactiveFlag = 0 AND (Aff_PractitionerNo IS NULL OR LTRIM(RTRIM(Aff_PractitionerNo)) = '')`
+      }
+    ],
     checkDiffs: (s, b) => {
       const diffs = [];
       if (normalizeString(s.name) !== normalizeString(b['Practitioner Name'] || b['Full Name'])) {
@@ -4574,6 +4588,13 @@ const RECON_CONFIG = {
                WHERE Frwk_Discriminator = 'Aff.Practitioner'`,
     getSqlKey: r => String(r.practitioner_number || '').trim(),
     getBubbleKey: r => String(r['Practitioner Number'] || '').trim(),
+    integrityRules: [
+      {
+        name: "Active Practitioner with no Admission Types",
+        query: `SELECT Id FROM dbo.Core_Persons 
+                WHERE Frwk_Discriminator = 'Aff.Practitioner' AND Frwk_InactiveFlag = 0 AND Aff_IsAttorney = 0 AND Aff_IsConveyancer = 0 AND Aff_IsNotary = 0 AND Aff_IsAdvocate = 0`
+      }
+    ],
     checkDiffs: (s, b) => {
       const diffs = [];
       if (normalizeBoolean(s.attorney) !== normalizeBoolean(b.Attorney)) diffs.push('Attorney');
@@ -4605,6 +4626,13 @@ const RECON_CONFIG = {
                WHERE cop.Frwk_Discriminator = 'Aff.FirmPractitioner'`,
     getSqlKey: r => String(r.id || '').trim().toLowerCase(),
     getBubbleKey: r => String(r.id || '').trim().toLowerCase(),
+    integrityRules: [
+      {
+        name: "Active Link with missing Entity References",
+        query: `SELECT Id FROM dbo.Core_Organisation_Persons 
+                WHERE Frwk_Discriminator = 'Aff.FirmPractitioner' AND Frwk_InactiveFlag = 0 AND (PersonId IS NULL OR OrganisationId IS NULL)`
+      }
+    ],
     checkDiffs: (s, b) => {
       const diffs = [];
       if (normalizeString(s.memno) !== normalizeString(b['Practitioner Number'])) diffs.push('PractitionerNumber');
@@ -4620,6 +4648,13 @@ const RECON_CONFIG = {
                FROM dbo.Aff_FirmFinancialYears`,
     getSqlKey: r => String(r.Id || r.id || '').trim().toLowerCase(),
     getBubbleKey: r => String(r['ID'] || r['id'] || '').trim().toLowerCase(),
+    integrityRules: [
+      {
+        name: "Active Audit with missing Year or Firm Number",
+        query: `SELECT Id FROM dbo.Aff_FirmFinancialYears 
+                WHERE Frwk_InactiveFlag = 0 AND (Year IS NULL OR FirmNo IS NULL OR LTRIM(RTRIM(FirmNo)) = '')`
+      }
+    ],
     checkDiffs: (s, b) => {
       const diffs = [];
       if (normalizeString(s.firm_number) !== normalizeString(b['Firm No.'])) diffs.push('FirmNo');
@@ -4638,6 +4673,13 @@ const RECON_CONFIG = {
                WHERE a.Frwk_InactiveFlag = 0`,
     getSqlKey: r => String(r.sql_key || '').trim().toLowerCase(),
     getBubbleKey: r => String(r['ID'] || r['id'] || '').trim().toLowerCase(),
+    integrityRules: [
+      {
+        name: "Active Application with missing Period or Applicant Link",
+        query: `SELECT Id FROM dbo.Lic_LicenseApplications 
+                WHERE Frwk_InactiveFlag = 0 AND (PeriodId IS NULL OR ApplicantId IS NULL)`
+      }
+    ],
     checkDiffs: (s, b) => []
   },
   certificates: {
@@ -4650,6 +4692,13 @@ const RECON_CONFIG = {
                WHERE l.Frwk_InactiveFlag = 0 AND a.Frwk_InactiveFlag = 0`,
     getSqlKey: r => String(r.sql_key || '').trim().toLowerCase(),
     getBubbleKey: r => String(r['id'] || r['ID'] || '').trim().toLowerCase(),
+    integrityRules: [
+      {
+        name: "Active Certificate with missing Holder Link",
+        query: `SELECT Id FROM dbo.Lic_Licenses 
+                WHERE Frwk_InactiveFlag = 0 AND LicenseHolderPersonId IS NULL`
+      }
+    ],
     checkDiffs: (s, b) => []
   }
 };

@@ -6,7 +6,7 @@
   "missingInBubble": 3404,
   "missingInSQL": 1251,
   "fieldMismatches": 692,
-  "lastReconciledTime": "2026-08-13T10:13:42.472Z",
+  "lastReconciledTime": "2026-08-13T11:48:49.378Z",
   "discrepancy_ids": {
     "Missing in Bubble": [
       "6044106",
@@ -7219,5 +7219,10 @@
       "396734"
     ]
   },
-  "integrity_issues": {}
+  "integrity_issues": {
+    "Active Practitioner with no Practitioner Number": {
+      "count": 0,
+      "ids": []
+    }
+  }
 }

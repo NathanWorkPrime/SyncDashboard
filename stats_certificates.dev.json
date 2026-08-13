@@ -6,7 +6,7 @@
   "missingInBubble": 1,
   "missingInSQL": 969,
   "fieldMismatches": 0,
-  "lastReconciledTime": "2026-08-13T09:34:54.618Z",
+  "lastReconciledTime": "2026-08-13T11:46:12.166Z",
   "discrepancy_ids": {
     "Missing in Bubble": [
       "537ea959-877a-4d53-b788-de16b7a7cb61"
@@ -984,5 +984,18 @@
     ],
     "SQL Duplicates": [],
     "Bubble Duplicates": []
+  },
+  "integrity_issues": {
+    "Active Certificate with missing Holder Link": {
+      "count": 6,
+      "ids": [
+        "C05AB7C3-78AC-4DDE-9293-2E7024F8D8C2",
+        "DF9C52D4-2312-4C3A-A303-6892A1778FD0",
+        "DF5AE139-1C7C-44DA-8253-6ADF359B36CE",
+        "6A246EE7-4926-43C2-9EA5-82DE538D9A79",
+        "5F450FAF-5EF8-4DD3-843D-B44C0BACE532",
+        "1E6B64A9-34E3-49EE-BB55-BDA92897C378"
+      ]
+    }
   }
 }
