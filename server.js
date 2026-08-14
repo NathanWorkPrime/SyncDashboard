@@ -3132,7 +3132,7 @@ async function doSyncProductionEmploymentHistory(topLimit = 5, trigger = 'manual
             cop.ValidFromDate as start_date,
             cop.ValidToDate as end_date,
             cop.Frwk_Discriminator as discriminator,
-            cop.Inactive as inactive,
+            CASE WHEN cop.Inactive = 1 OR (cop.ValidToDate IS NOT NULL AND cop.ValidToDate <= GETDATE()) THEN 1 ELSE 0 END as inactive,
             cop.Aff_ExternalId as external_id,
             ISNULL(cop.Frwk_LastUpdatedTimestamp, cop.Frwk_CreatedTimestamp) as last_updated
         FROM dbo.Core_Organisation_Persons cop
@@ -3156,7 +3156,7 @@ async function doSyncProductionEmploymentHistory(topLimit = 5, trigger = 'manual
             cop.ValidFromDate as start_date,
             cop.ValidToDate as end_date,
             cop.Frwk_Discriminator as discriminator,
-            cop.Inactive as inactive,
+            CASE WHEN cop.Inactive = 1 OR (cop.ValidToDate IS NOT NULL AND cop.ValidToDate <= GETDATE()) THEN 1 ELSE 0 END as inactive,
             cop.Aff_ExternalId as external_id,
             ISNULL(cop.Frwk_LastUpdatedTimestamp, cop.Frwk_CreatedTimestamp) as last_updated
         FROM dbo.Core_Organisation_Persons cop
@@ -4698,7 +4698,25 @@ const RECON_CONFIG = {
       const diffs = [];
       if (normalizeString(s.memno) !== normalizeString(b['Practitioner Number'])) diffs.push('PractitionerNumber');
       if (normalizeString(s.firmno) !== normalizeString(b['Firm Number'])) diffs.push('FirmNumber');
-      if (normalizeBoolean(s.inactive) !== normalizeBoolean(b['Inactive'])) diffs.push('Inactive');
+      
+      const sqlInactive = normalizeBoolean(s.inactive);
+      const bubInactive = normalizeBoolean(b['Inactive']);
+      let inactiveMatch = false;
+      
+      if (sqlInactive === bubInactive) {
+        inactiveMatch = true;
+      } else if (bubInactive === true && sqlInactive === false) {
+        // Bubble has marked it inactive (correctly), but SQL is still raw false.
+        // This is acceptable if the record has an end date in the past.
+        const hasPastEndDate = s.end_date && new Date(s.end_date) <= new Date();
+        if (hasPastEndDate) {
+          inactiveMatch = true;
+        }
+      }
+      
+      if (!inactiveMatch) {
+        diffs.push('Inactive');
+      }
       return diffs;
     }
   },
