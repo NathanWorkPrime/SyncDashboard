@@ -4726,7 +4726,10 @@ const RECON_CONFIG = {
     sqlQuery: `SELECT Id, FirmNo as firm_number, Year, Frwk_InactiveFlag as inactive 
                FROM dbo.Aff_FirmFinancialYears`,
     getSqlKey: r => String(r.Id || r.id || '').trim().toLowerCase(),
-    getBubbleKey: r => String(r['ID'] || r['id'] || '').trim().toLowerCase(),
+    getBubbleKey: r => {
+      const key = String(r['ID'] || r['id'] || '').trim();
+      return /^\d+$/.test(key) ? key.toLowerCase() : null;
+    },
     integrityRules: [
       {
         name: "Active Audit with missing Year or Firm Number",
