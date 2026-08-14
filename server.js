@@ -4732,6 +4732,14 @@ const RECON_CONFIG = {
         name: "Active Audit with missing Year or Firm Number",
         query: `SELECT Id FROM dbo.Aff_FirmFinancialYears 
                 WHERE Frwk_InactiveFlag = 0 AND (Year IS NULL OR FirmNo IS NULL OR LTRIM(RTRIM(FirmNo)) = '')`
+      },
+      {
+        name: "Audit Timeline End Date before Start Date",
+        query: `SELECT Id FROM dbo.Aff_FirmFinancialYears
+                WHERE Frwk_InactiveFlag = 0 
+                  AND FinancialYearEndDate IS NOT NULL 
+                  AND FinancialYearStartDate IS NOT NULL 
+                  AND FinancialYearEndDate < FinancialYearStartDate`
       }
     ],
     checkDiffs: (s, b) => {
