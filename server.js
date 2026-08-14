@@ -2091,7 +2091,20 @@ async function doSyncProductionPractitioners(topLimit = 5, trigger = 'manual', b
             Aff_IsNotary as Notary,
             Aff_NotaryDate as NotaryDate,
             Frwk_InactiveFlag as InactiveFlag,
-            ISNULL(Frwk_LastUpdatedTimestamp, Frwk_CreatedTimestamp) as TransactionDate
+            ISNULL(Frwk_LastUpdatedTimestamp, Frwk_CreatedTimestamp) as TransactionDate,
+            Aff_PMTStatusLkp as PMTStatus,
+            Aff_ProvinceLkp as ProvinceLkp,
+            Aff_RedFlagIndicatorLkp as RedFlag,
+            Aff_IsAttorney as Attorney,
+            Aff_AttorneyDate as AttorneyDate,
+            Aff_IsConveyancer as Conveyancer,
+            Aff_ConveyancerDate as ConveyancerDate,
+            Aff_DateCourseCompleted as CourseCompletedDate,
+            Aff_CourseProofDueDate as CourseProofDate,
+            Frwk_InactivatedTimestamp as DateInactive,
+            Aff_StatusLkp as Activity,
+            Aff_IsAdvocate as Advocate,
+            Aff_AdvocateDate as AdvocateDate
         FROM dbo.Core_Persons
         WHERE Frwk_Discriminator = 'Aff.Practitioner' AND ${whereClause}
       `;
@@ -2119,7 +2132,20 @@ async function doSyncProductionPractitioners(topLimit = 5, trigger = 'manual', b
             Aff_IsNotary as Notary,
             Aff_NotaryDate as NotaryDate,
             Frwk_InactiveFlag as InactiveFlag,
-            ISNULL(Frwk_LastUpdatedTimestamp, Frwk_CreatedTimestamp) as TransactionDate
+            ISNULL(Frwk_LastUpdatedTimestamp, Frwk_CreatedTimestamp) as TransactionDate,
+            Aff_PMTStatusLkp as PMTStatus,
+            Aff_ProvinceLkp as ProvinceLkp,
+            Aff_RedFlagIndicatorLkp as RedFlag,
+            Aff_IsAttorney as Attorney,
+            Aff_AttorneyDate as AttorneyDate,
+            Aff_IsConveyancer as Conveyancer,
+            Aff_ConveyancerDate as ConveyancerDate,
+            Aff_DateCourseCompleted as CourseCompletedDate,
+            Aff_CourseProofDueDate as CourseProofDate,
+            Frwk_InactivatedTimestamp as DateInactive,
+            Aff_StatusLkp as Activity,
+            Aff_IsAdvocate as Advocate,
+            Aff_AdvocateDate as AdvocateDate
         FROM dbo.Core_Persons
         WHERE Frwk_Discriminator = 'Aff.Practitioner'
           AND (Frwk_LastUpdatedTimestamp > @lastSyncTime OR Frwk_CreatedTimestamp > @lastSyncTime)
@@ -2177,15 +2203,34 @@ async function doSyncProductionPractitioners(topLimit = 5, trigger = 'manual', b
           initials: rec.Initials || null,
           title: rec.Title !== null ? String(rec.Title) : null,
           gender: rec.Gender !== null ? String(rec.Gender) : null,
-          date_of_birth: rec.DateOfBirth ? rec.DateOfBirth.toISOString() : null,
+          date_of_birth: rec.DateOfBirth ? (rec.DateOfBirth.toISOString ? rec.DateOfBirth.toISOString() : rec.DateOfBirth) : null,
           cell_number: rec.CellNumber || null,
           fax_number: rec.FaxNumber || null,
           email: rec.Email || null,
           id_number: rec.IDNumber || null,
           discriminator: rec.Discriminator || null,
           inactive_flag: rec.InactiveFlag === true || rec.InactiveFlag === 1 ? "yes" : "no",
-          transaction_date: rec.TransactionDate ? rec.TransactionDate.toISOString() : null,
+          transaction_date: rec.TransactionDate ? (rec.TransactionDate.toISOString ? rec.TransactionDate.toISOString() : rec.TransactionDate) : null,
           username: rec.MemNo !== null ? String(rec.MemNo) : null,
+          pmt_status: rec.PMTStatus !== null && rec.PMTStatus !== undefined ? String(rec.PMTStatus) : null,
+          province: rec.ProvinceLkp !== null && rec.ProvinceLkp !== undefined ? String(rec.ProvinceLkp) : null,
+          red_flag: rec.RedFlag !== null && rec.RedFlag !== undefined ? String(rec.RedFlag) : null,
+          attorney: rec.Attorney !== null && rec.Attorney !== undefined ? String(rec.Attorney) : null,
+          attorney_date: rec.AttorneyDate ? (rec.AttorneyDate.toISOString ? rec.AttorneyDate.toISOString() : rec.AttorneyDate) : null,
+          notary: rec.Notary !== null && rec.Notary !== undefined ? String(rec.Notary) : null,
+          notary_date: rec.NotaryDate ? (rec.NotaryDate.toISOString ? rec.NotaryDate.toISOString() : rec.NotaryDate) : null,
+          conveyancer: rec.Conveyancer !== null && rec.Conveyancer !== undefined ? String(rec.Conveyancer) : null,
+          conveyancer_date: rec.ConveyancerDate ? (rec.ConveyancerDate.toISOString ? rec.ConveyancerDate.toISOString() : rec.ConveyancerDate) : null,
+          course_completed_date: rec.CourseCompletedDate ? (rec.CourseCompletedDate.toISOString ? rec.CourseCompletedDate.toISOString() : rec.CourseCompletedDate) : null,
+          course_proof_date: rec.CourseProofDate ? (rec.CourseProofDate.toISOString ? rec.CourseProofDate.toISOString() : rec.CourseProofDate) : null,
+          date_inactive: rec.DateInactive ? (rec.DateInactive.toISOString ? rec.DateInactive.toISOString() : rec.DateInactive) : null,
+          physical_address: null,
+          postal_address: null,
+          role: rec.Activity !== null && rec.Activity !== undefined ? String(rec.Activity) : null,
+          advocate: rec.Advocate !== null && rec.Advocate !== undefined ? String(rec.Advocate) : null,
+          advocate_date: rec.AdvocateDate ? (rec.AdvocateDate.toISOString ? rec.AdvocateDate.toISOString() : rec.AdvocateDate) : null,
+          ffc_advocate: null,
+          is_latest_row: "yes",
         };
 
         const wr = await fetchWithRetry(bubbleBase + 'wf/get_practitioners', {
@@ -4721,7 +4766,7 @@ const RECON_CONFIG = {
 
 function normalizeString(val) {
   if (val === null || val === undefined) return '';
-  return String(val).trim().toUpperCase();
+  return String(val).replace(/\s+/g, ' ').trim().toUpperCase();
 }
 
 function normalizeBoolean(val) {
