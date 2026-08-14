@@ -1500,13 +1500,18 @@ async function doSyncProductionBanks(topLimit = 5, trigger = 'manual', bubbleBas
     if (customIds && customIds.length > 0) {
       const conditions = [];
       customIds.forEach(id => {
-        const parts = id.split('|');
-        const acc = parts[0]?.trim();
-        const firm = parts[1]?.trim();
-        if (acc && firm) {
-          conditions.push(`(AccountNumber = '${acc}' AND Aff_FirmNo = '${firm}')`);
-        } else if (acc) {
-          conditions.push(`(AccountNumber = '${acc}')`);
+        const trimmed = String(id).trim();
+        if (/^\d+$/.test(trimmed)) {
+          conditions.push(`(v.Id = ${trimmed})`);
+        } else {
+          const parts = trimmed.split('|');
+          const acc = parts[0]?.trim();
+          const firm = parts[1]?.trim();
+          if (acc && firm) {
+            conditions.push(`(AccountNumber = '${acc}' AND Aff_FirmNo = '${firm}')`);
+          } else if (acc) {
+            conditions.push(`(AccountNumber = '${acc}')`);
+          }
         }
       });
 
@@ -1518,18 +1523,20 @@ async function doSyncProductionBanks(topLimit = 5, trigger = 'manual', bubbleBas
       const step1 = pool.request();
       const query = `
         SELECT 
-            Id,
-            AccountNumber,
-            BankLkp as BankCode,
-            AccountHolderName as Bank_Name,
-            BranchName as Branch,
-            Aff_FirmNo as Firmno,
-            Frwk_CreatedTimestamp as Daterec,
-            Frwk_LastUpdatedTimestamp as trn_dte,
-            AFF_StatusLkp as InactiveFlag,
-            AccountTypeLkp,
-            DateClosed
-        FROM dbo.vw_AFF_TrustBankAccountModel
+            v.Id,
+            v.AccountNumber,
+            v.BankLkp as BankCode,
+            v.AccountHolderName as Bank_Name,
+            v.BranchName as Branch,
+            v.Aff_FirmNo as Firmno,
+            v.Frwk_CreatedTimestamp as Daterec,
+            v.Frwk_LastUpdatedTimestamp as trn_dte,
+            v.AFF_StatusLkp as InactiveFlag,
+            v.AccountTypeLkp,
+            v.DateClosed,
+            b.Aff_FirmId as Aff_FirmId
+        FROM dbo.vw_AFF_TrustBankAccountModel v
+        LEFT JOIN dbo.Core_BankAccounts b ON v.Id = b.Id
         WHERE ${conditions.join(' OR ')}
       `;
       const res = await step1.query(query);
@@ -1540,20 +1547,22 @@ async function doSyncProductionBanks(topLimit = 5, trigger = 'manual', bubbleBas
       step1.input('topLimit', sql.Int, topLimit);
       const query = `
         SELECT TOP (@topLimit)
-            Id,
-            AccountNumber,
-            BankLkp as BankCode,
-            AccountHolderName as Bank_Name,
-            BranchName as Branch,
-            Aff_FirmNo as Firmno,
-            Frwk_CreatedTimestamp as Daterec,
-            Frwk_LastUpdatedTimestamp as trn_dte,
-            AFF_StatusLkp as InactiveFlag,
-            AccountTypeLkp,
-            DateClosed
-        FROM dbo.vw_AFF_TrustBankAccountModel
-        WHERE (Frwk_LastUpdatedTimestamp > @lastSyncTime OR Frwk_CreatedTimestamp > @lastSyncTime)
-        ORDER BY Frwk_LastUpdatedTimestamp ASC
+            v.Id,
+            v.AccountNumber,
+            v.BankLkp as BankCode,
+            v.AccountHolderName as Bank_Name,
+            v.BranchName as Branch,
+            v.Aff_FirmNo as Firmno,
+            v.Frwk_CreatedTimestamp as Daterec,
+            v.Frwk_LastUpdatedTimestamp as trn_dte,
+            v.AFF_StatusLkp as InactiveFlag,
+            v.AccountTypeLkp,
+            v.DateClosed,
+            b.Aff_FirmId as Aff_FirmId
+        FROM dbo.vw_AFF_TrustBankAccountModel v
+        LEFT JOIN dbo.Core_BankAccounts b ON v.Id = b.Id
+        WHERE (v.Frwk_LastUpdatedTimestamp > @lastSyncTime OR v.Frwk_CreatedTimestamp > @lastSyncTime)
+        ORDER BY v.Frwk_LastUpdatedTimestamp ASC
       `;
       const res = await step1.query(query);
       records = res.recordset;
@@ -1600,7 +1609,7 @@ async function doSyncProductionBanks(topLimit = 5, trigger = 'manual', bubbleBas
       try {
         const payload = {
           que_idn: rec.Id !== null ? Number(rec.Id) : null,
-          firm_id: rec.Id !== null ? Number(rec.Id) : null,
+          firm_id: rec.Aff_FirmId !== null ? Number(rec.Aff_FirmId) : null,
           firm_number: rec.Firmno !== null ? Number(rec.Firmno) : null,
           bank_code: rec.BankCode !== null ? Number(rec.BankCode) : null,
           bank_name: rec.Bank_Name || null,
@@ -1614,7 +1623,7 @@ async function doSyncProductionBanks(topLimit = 5, trigger = 'manual', bubbleBas
           date_opened: rec.Daterec || null,
           last_updated: rec.trn_dte || null,
           created_timestamp: rec.Daterec || null,
-          inactive_flag: rec.InactiveFlag === 0 ? "no" : "yes",
+          inactive_flag: rec.InactiveFlag === 2 ? "yes" : "no",
           transaction_date: rec.trn_dte ? rec.trn_dte.toISOString() : null,
           external_id: rec.Id !== null ? String(rec.Id) : null,
         };
