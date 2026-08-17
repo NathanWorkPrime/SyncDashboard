@@ -4762,7 +4762,12 @@ const RECON_CONFIG = {
                INNER JOIN dbo.Core_Persons pe ON pe.Id = a.ApplicantId AND pe.Frwk_InactiveFlag = 0
                WHERE a.Frwk_InactiveFlag = 0`,
     getSqlKey: r => String(r.sql_key || '').trim().toLowerCase(),
-    getBubbleKey: r => String(r['ID'] || r['id'] || '').trim().toLowerCase(),
+    getBubbleKey: r => {
+      if (r['Inactive Flag'] === 1 || r['Inactive Flag'] === '1' || r['Inactive Flag'] === true) {
+        return null;
+      }
+      return String(r['ID'] || r['id'] || '').trim().toLowerCase();
+    },
     integrityRules: [
       {
         name: "Active Application with missing Period or Applicant Link",
@@ -5024,7 +5029,7 @@ async function downloadBubbleCache(id, isProduction = false, bubbleBase = null, 
         let attempt = 0;
         while (attempt < 5) {
           try {
-            const url = `${finalBase}obj/${typeName}?limit=100&cursor=${cur}`;
+            const url = `${finalBase}obj/${typeName}?limit=100&cursor=${cur}&sort=Created%20Date`;
             const res = await fetch(url, { 
               headers: { Authorization: `Bearer ${finalToken}` },
               signal: AbortSignal.timeout(15000)
@@ -6318,7 +6323,7 @@ async function doSyncApplications(topLimit = 5, trigger = 'manual', bubbleBase =
           Frwk_Discriminator: record.Frwk_Discriminator,
           StatusLkp: record.StatusLkp != null ? String(record.StatusLkp) : null,
           ApplicationDate: record.ApplicationDate?.toISOString() || null,
-          RequiresManualReview: record.RequiresManualReview ? 1 : 0,
+          RequiresManualReview: record.RequiresManualReview === 1 || record.RequiresManualReview === true,
           PaymentAmount: record.PaymentAmount,
           PaymentStatusLkp: record.PaymentStatusLkp != null ? String(record.PaymentStatusLkp) : null,
           LicenseId: record.LicenseId,
@@ -6344,9 +6349,9 @@ async function doSyncApplications(topLimit = 5, trigger = 'manual', bubbleBase =
           Aff_FfcApplicationDocumentId: record.Aff_FfcApplicationDocumentId,
           Aff_TaxAmount: record.Aff_TaxAmount != null ? String(record.Aff_TaxAmount) : null,
           Aff_ApplicationFeePaymentId: record.Aff_ApplicationFeePaymentId,
-          Aff_IsLicenseWithdrawn: record.Aff_IsLicenseWithdrawn === 1 || record.Aff_IsLicenseWithdrawn === true ? 'yes' : 'no',
-          Aff_IsReOpened: record.Aff_IsReOpened === 1 || record.Aff_IsReOpened === true ? 'yes' : 'no',
-          Aff_InformationIsVerified: record.Aff_InformationIsVerified === 1 || record.Aff_InformationIsVerified === true ? 'yes' : 'no'
+          Aff_IsLicenseWithdrawn: record.Aff_IsLicenseWithdrawn === 1 || record.Aff_IsLicenseWithdrawn === true,
+          Aff_IsReOpened: record.Aff_IsReOpened === 1 || record.Aff_IsReOpened === true,
+          Aff_InformationIsVerified: record.Aff_InformationIsVerified === 1 || record.Aff_InformationIsVerified === true
         };
 
         const fullUrl = bubbleBase + 'wf/sync-applications';

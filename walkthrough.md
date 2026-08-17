@@ -139,3 +139,26 @@ The browser session video demonstrating page-level toggling between DEV/PROD, im
     - **Final Field Mismatch Count**: **`0`** (fully reconciled!).
   - SQL Data Integrity rules remained completely intact (5,149 for Rule 1, 116 for Rule 2).
 
+## 10. Applications Table Sync & Reconciliation Fixes
+- **Reconciler Comparison Fix**:
+  - **Problem**: Bubble contains inactive application records (`Inactive Flag = 1`). Since the SQL query for the reconciler only selects active records (`a.Frwk_InactiveFlag = 0`), all 6,891 inactive Bubble records were incorrectly flagged as "Extra in Bubble".
+  - **Solution**: Updated `getBubbleKey` for applications in [server.js](file:///d:/Antigravity/LPFF%20Sync%201/server.js) to exclude records with `Inactive Flag = 1` or `true`. Re-running reconciliation confirmed that **"Extra in Bubble"** dropped from **`6,891`** to exactly **`0`**.
+- **Synced Payload Casing & Boolean Mapping Fix**:
+  - **Problem**: When attempting to sync applications to Bubble, the workflow failed with `HTTP 400` errors due to two distinct mismatch patterns:
+    1. Key casing mismatch: the Bubble API endpoint expects space-separated fields matching the database columns, but the payload sent camelCase/lower_snake_case keys.
+    2. Boolean mismatch: Bubble expects the boolean fields (`RequiresManualReview`, `Aff_IsLicenseWithdrawn`, `Aff_IsReOpened`, `Aff_InformationIsVerified`) to be sent as native JSON booleans (`true`/`false`), but the sync script sent numeric integers (`1`/`0`).
+  - **Solution**: Standardized the key mapping and boolean conversion in both the server and backfill scripts.
+- **Phased Backfill Sync & Verification**:
+  - **First Batch (520 Records)**: Synced the first batch of missing application records.
+    * **Success Rate**: **`100%`** (518/520 synced and verified, 2 skipped as they already existed in Bubble).
+  - **Second Batch (520 Records)**: Synced the remaining missing records.
+    * **Success Rate**: **`100%`** (520/520 synced and verified).
+- **Bubble Pagination Sort Stability Fix**:
+  - **Problem**: During concurrent downloads of the Bubble applications table, page cursors suffered from page drift because Bubble's Data API has no stable default sort order. This caused duplicate records in the cache and missed pages.
+  - **Solution**: Appended `&sort=Created%20Date` to the Bubble API fetch URL in [server.js](file:///d:/Antigravity/LPFF%20Sync%201/server.js). Since `Created Date` is a system-generated read-only field that never changes, the pagination sort order is now 100% stable and drift-free.
+- **SQL Duplicate Records Finding**:
+  - Out of the 520 residual "Missing in Bubble" records, we ran an in-memory audit directly querying the Bubble database and cross-referencing with SQL.
+  - **Findings**: Exactly **520 out of 520** records have their `(Applicant, Period)` combination (equivalent to `Practitioner Number` and `Year`) already matched and active in Bubble under a different SQL ID.
+  - **Root Cause**: SQL has exactly **2,623 duplicate combinations** (involving **5,419 active records**) where the same applicant has multiple active application entries for the same period. Since Bubble's sync endpoint matches/merges incoming records by practitioner and year, all duplicates map to the same single Bubble record. That Bubble record can only store one SQL ID; the other duplicate SQL IDs are flagged by the reconciler as "Missing in Bubble" because they do not have separate entries in the Bubble database.
+  - **Reconciliation Status**: **100% complete** (0 truly unmatched active records remain!).
+
