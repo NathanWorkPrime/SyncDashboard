@@ -3713,7 +3713,7 @@ async function doSyncProductionAudits(topLimit = 5, trigger = 'manual', bubbleBa
           audit_type: null,
           approved: null,
           auditor_registration_no: rec.AuditorID || null,
-          inactive_flag: rec.InactiveFlag === true || rec.InactiveFlag === 1 ? "yes" : "no",
+          inactive_flag: rec.InactiveFlag === true || rec.InactiveFlag === 1 ? "true" : "false",
           last_updated: rec.LastUpdated ? rec.LastUpdated.toISOString() : null,
           external_id: rec.ID !== null ? String(rec.ID) : null,
         };

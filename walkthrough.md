@@ -124,8 +124,18 @@ The browser session video demonstrating page-level toggling between DEV/PROD, im
   - **Execution**: We wrote and executed [execute_audits_fixes.js](file:///d:/Antigravity/LPFF%20Sync%201/execute_audits_fixes.js) to sequentially backfill these records using the standard `wf/get_audits` endpoint with native pacing (150ms delay).
   - **Result**:
     - Over the weekend: **`2,522`** records successfully updated.
-    - Today: **`2,848`** records successfully updated.
-    - **Total Successes**: **`5,370`** records sync-corrected.
-  - **Reconciliation Impact**: Triggered a fresh reconciliation run. The **"Field Mismatch"** count for Audits dropped from **`5,398`** to exactly **`726`**.
-  - These remaining 726 records are exclusively Inactive status discrepancies (SQL true vs Bubble false) where the API returned HTTP 200 but did not persist the status change in Bubble (pointing to a Bubble-side workflow condition/mapping limitation on update).
+    - Today (Phase 2): **`2,848`** records successfully updated.
+    - **Initial Reconciliation Impact**: Triggered a fresh reconciliation run. The **"Field Mismatch"** count for Audits dropped from **`5,398`** to exactly **`726`**.
+  - **Investigation of the 726 Remaining Mismatches**:
+    - We pulled a sample of 5 records and manually sync-tested them while capturing Bubble's exact response headers and bodies.
+    - We discovered that Bubble returned `HTTP 200` with `status: "success"` but did not update the `Inactive Flag` in its database.
+    - By checking `bubble_meta_dump.json`, we confirmed that `inactive_flag` on the Bubble side is a `text` parameter.
+    - Testing different parameter string variations (`"yes"`, `"true"`, `"1"`) revealed that the Bubble workflow expects the string `"true"` or `"false"` (as text) to toggle its numeric `Inactive Flag` field, whereas `doSyncProductionAudits` in `server.js` was sending `"yes"` / `"no"`.
+    - This explains why active records synced correctly (both `"no"` and invalid strings map to `0`), while inactive records remained active in Bubble (as `"yes"` is not recognized as `"true"`).
+  - **Fix Deployment & Final Sync**:
+    - Updated `server.js` and `execute_audits_fixes.js` to map `inactive_flag` to `"true"` / `"false"`.
+    - Ran the remaining **`726`** records through `execute_audits_fixes.js`.
+    - Forced a fresh Bubble cache download and re-ran reconciliation.
+    - **Final Field Mismatch Count**: **`0`** (fully reconciled!).
   - SQL Data Integrity rules remained completely intact (5,149 for Rule 1, 116 for Rule 2).
+

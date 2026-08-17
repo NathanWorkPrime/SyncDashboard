@@ -124,7 +124,7 @@ async function main() {
         bank_charge_amount: rec.BankChargesAmount !== null ? Number(rec.BankChargesAmount) : null,
         auditor: rec.AuditorId !== null ? String(rec.AuditorId) : null,
         discriminator: "Aff.FirmFY",
-        inactive_flag: rec.Frwk_InactiveFlag === true || rec.Frwk_InactiveFlag === 1 ? "yes" : "no",
+        inactive_flag: rec.Frwk_InactiveFlag === true || rec.Frwk_InactiveFlag === 1 ? "true" : "false",
         last_updated: (rec.Frwk_LastUpdatedTimestamp || rec.Frwk_CreatedTimestamp || new Date()).toISOString(),
         audit_compliance_status: rec.AuditComplianceStatusLkp !== null ? String(rec.AuditComplianceStatusLkp) : null,
         external_id: rec.Id !== null ? String(rec.Id) : null
