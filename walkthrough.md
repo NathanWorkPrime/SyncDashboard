@@ -161,4 +161,8 @@ The browser session video demonstrating page-level toggling between DEV/PROD, im
   - **Findings**: Exactly **520 out of 520** records have their `(Applicant, Period)` combination (equivalent to `Practitioner Number` and `Year`) already matched and active in Bubble under a different SQL ID.
   - **Root Cause**: SQL has exactly **2,623 duplicate combinations** (involving **5,419 active records**) where the same applicant has multiple active application entries for the same period. Since Bubble's sync endpoint matches/merges incoming records by practitioner and year, all duplicates map to the same single Bubble record. That Bubble record can only store one SQL ID; the other duplicate SQL IDs are flagged by the reconciler as "Missing in Bubble" because they do not have separate entries in the Bubble database.
   - **Reconciliation Status**: **100% complete** (0 truly unmatched active records remain!).
+- **Verification Screenshot**:
+  ![Applications Reconciled counts](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/production_sync_counts_1786981412097.png)
+- **Interactive Verification Video**:
+  ![Dashboard counts verification video](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/dashboard_view_1786981352292.webp)
 
