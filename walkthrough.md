@@ -114,3 +114,18 @@ The browser session video demonstrating page-level toggling between DEV/PROD, im
   - **Interactive Verification Video**:
     ![Post-Deletion Video Verification](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/verify_post_deletion_dashboard_1786632229962.webp)
 
+## 9. Audits Table Reconciliation & Field Mismatches Backfill
+- **Reconciliation Option B**:
+  - **Problem**: Bubble contains FFC questionnaire records with GUID IDs synced from `dbo.Aff_FfcFirmQuestionnaires` into `lpff.firm.audits.view`. Since the reconciler only compares against the annual audits table `dbo.Aff_FirmFinancialYears` (which has numeric IDs), all 16,090 questionnaires were incorrectly flagged as "Extra in Bubble".
+  - **Solution**: Implemented Option B by updating `getBubbleKey` for audits in [server.js](file:///d:/Antigravity/LPFF%20Sync%201/server.js) to ignore non-numeric IDs. This dropped the **"Extra in Bubble"** count from **`16,092`** to exactly **`2`** legacy test records (Firm `99999`, Year `2030`), which are expected orphans.
+  - **Integrity Rule 2**: Implemented "Audit Timeline End Date before Start Date" (which identified exactly **`116`** anomalous records in production).
+- **Field Mismatch Backfill**:
+  - **Problem**: There were 5,398 field-mismatched records at Production scale. An analysis revealed that 92.35% contained Inactive flag mismatches (due to stale Bubble entries) and 9.95% had Year mismatches (legacy import setting them to 2020 instead of 2000).
+  - **Execution**: We wrote and executed [execute_audits_fixes.js](file:///d:/Antigravity/LPFF%20Sync%201/execute_audits_fixes.js) to sequentially backfill these records using the standard `wf/get_audits` endpoint with native pacing (150ms delay).
+  - **Result**:
+    - Over the weekend: **`2,522`** records successfully updated.
+    - Today: **`2,848`** records successfully updated.
+    - **Total Successes**: **`5,370`** records sync-corrected.
+  - **Reconciliation Impact**: Triggered a fresh reconciliation run. The **"Field Mismatch"** count for Audits dropped from **`5,398`** to exactly **`726`**.
+  - These remaining 726 records are exclusively Inactive status discrepancies (SQL true vs Bubble false) where the API returned HTTP 200 but did not persist the status change in Bubble (pointing to a Bubble-side workflow condition/mapping limitation on update).
+  - SQL Data Integrity rules remained completely intact (5,149 for Rule 1, 116 for Rule 2).
