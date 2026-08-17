@@ -6335,7 +6335,7 @@ async function loadLiveDashboard() {
   try {
     const res = await fetch(settings.serverUrl + '/dashboard/reconciliation-summary', {
       headers: {
-        'x-bubble-base-url': settings.bubbleBaseUrl,
+        'x-bubble-base-url': settings.bubbleBaseUrl || environments[activeEnv].bubbleBaseUrl,
         'x-environment': activeEnv === 'prod' ? 'production' : 'development'
       }
     });
@@ -6627,7 +6627,7 @@ function pollReconciliationStatus() {
     try {
       const res = await fetch(settings.serverUrl + '/dashboard/reconciliation-summary', {
         headers: {
-          'x-bubble-base-url': settings.bubbleBaseUrl,
+          'x-bubble-base-url': settings.bubbleBaseUrl || environments[activeEnv].bubbleBaseUrl,
           'x-environment': activeEnv === 'prod' ? 'production' : 'development'
         }
       });

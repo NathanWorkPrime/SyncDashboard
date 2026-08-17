@@ -5259,7 +5259,7 @@ async function runSingleTableReconciliation(id, isProduction = false, bubbleBase
 }
 
 app.get('/dashboard/reconciliation-summary', async (req, res) => {
-  const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
+  const bubbleBase = (req.headers['x-bubble-base-url'] && req.headers['x-bubble-base-url'] !== 'undefined') ? req.headers['x-bubble-base-url'] : DEFAULT_BUBBLE_BASE;
   const isProduction = req.headers['x-environment'] === 'production' || !bubbleBase.includes('/version-test/');
   const env = isProduction ? 'prod' : 'dev';
   const syncConfigIdsList = getSyncConfigIds(isProduction);

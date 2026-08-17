@@ -166,3 +166,15 @@ The browser session video demonstrating page-level toggling between DEV/PROD, im
 - **Interactive Verification Video**:
   ![Dashboard counts verification video](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/dashboard_view_1786981352292.webp)
 
+## Section 11: Dashboard Bubble Counts Loading Fix
+
+### Changes Implemented
+- **Frontend Fallback Fix**: In [dashboard.html](file:///d:/Antigravity/LPFF%20Sync%201/dashboard.html), added `|| environments[activeEnv].bubbleBaseUrl` to the `x-bubble-base-url` request header for `/dashboard/reconciliation-summary` fetches. This prevents `undefined` values from being sent when `settings.bubbleBaseUrl` is not yet saved.
+- **Backend Guard Check**: In [server.js](file:///d:/Antigravity/LPFF%20Sync%201/server.js), added a backend guard check to filter out literal `"undefined"` header values, ensuring it correctly falls back to `DEFAULT_BUBBLE_BASE` if the header is stringified as `"undefined"`.
+
+### Verification Result
+All Bubble counts now load successfully on the dashboard comparison table.
+- **Verification Screenshot**:
+  ![Populated Bubble counts](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/prod_live_counts_1786981971879.png)
+- **Interactive Verification Video**:
+  ![Counts verified video](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/counts_verified_1786981920727.webp)
