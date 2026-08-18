@@ -4723,10 +4723,20 @@ const RECON_CONFIG = {
   audits: {
     cacheFile: '.cache_lpff.firm.audits.view.json',
     bubbleTable: 'lpff.firm.audits.view',
-    sqlQuery: `SELECT Id, FirmNo as firm_number, Year, Frwk_InactiveFlag as inactive 
-               FROM dbo.Aff_FirmFinancialYears`,
+    sqlQuery: `SELECT a.Id, a.FirmNo as firm_number, a.Year, a.Frwk_InactiveFlag as inactive 
+               FROM dbo.Aff_FirmFinancialYears a
+               WHERE a.Year >= 2025
+                 AND EXISTS (
+                   SELECT 1 
+                   FROM LPFF_FFC_ITG.dbo.itg_inn_audits raw 
+                   WHERE raw.FIRMNO = a.FirmNo 
+                     AND raw.Year = a.Year 
+                     AND raw.dev_run = 0
+                 )`,
     getSqlKey: r => String(r.Id || r.id || '').trim().toLowerCase(),
     getBubbleKey: r => {
+      const yr = r['Year'] ? parseInt(r['Year']) : null;
+      if (yr !== null && yr < 2025) return null;
       const key = String(r['ID'] || r['id'] || '').trim();
       return /^\d+$/.test(key) ? key.toLowerCase() : null;
     },

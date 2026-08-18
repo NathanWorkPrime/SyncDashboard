@@ -204,3 +204,21 @@ We verified that both SQL Server databases (Core and Imports) on the ngrok tunne
   ![Final Production mode counts](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/prod_mode_counts_1787035242694.png)
 - **Watermark Verification Video**:
   ![Watermark verification video](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/watermarks_verified_1787035163145.webp)
+
+## Section 13: Audits Reconciler Filter Alignment Fix
+
+### Changes Implemented
+- **Audits Reconciler Query Alignment**: Updated `sqlQuery` for `audits` in [server.js](file:///d:/Antigravity/LPFF%20Sync%201/server.js#L4726-L4732) to filter out records where `Year < 2025` and exclude dev runs (`dev_run = 1` or dev runs only) via a subquery against `LPFF_FFC_ITG.dbo.itg_inn_audits`.
+- **Bubble Key Filtering**: Updated `getBubbleKey` for `audits` in [server.js](file:///d:/Antigravity/LPFF%20Sync%201/server.js#L4733-L4736) to return `null` for Bubble records where `Year < 2025`.
+
+### Verification Results
+After executing reconciliation with the updated filters:
+- **Missing (Bubble)**: Dropped from `5,827` to **`359`** (representing only the active production stale watermark backlog, as expected).
+- **Extra (Bubble)**: Changed to **`13,909`** (reflecting dev runs and historical records stored in Bubble that are excluded from production SQL checks).
+- **Field Mismatches**: Remained at **`0`**.
+
+- **Verification Screenshot**:
+  ![Audits reconciler query fix](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/dashboard_updated_counts_1787036820142.png)
+- **Interactive Verification Video**:
+  ![Audits reconciler video](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/audits_reconciler_fixed_1787036486823.webp)
+
