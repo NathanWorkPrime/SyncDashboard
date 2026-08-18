@@ -178,3 +178,27 @@ All Bubble counts now load successfully on the dashboard comparison table.
   ![Populated Bubble counts](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/prod_live_counts_1786981971879.png)
 - **Interactive Verification Video**:
   ![Counts verified video](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/counts_verified_1786981920727.webp)
+
+## Section 12: Network Connectivity Check & Reconciliation Pass
+
+### Connectivity Verification
+We verified that both SQL Server databases (Core and Imports) on the ngrok tunnel port 27076, as well as the Bubble Dev and Prod APIs, are connecting successfully from the current network:
+- **Core SQL Server (`LPFF_FFC_ITG`)**: Connected successfully.
+- **Imports SQL Server (`PRODUCTION`)**: Connected successfully.
+- **Bubble Dev / Prod API**: Connected successfully (`200 OK`).
+
+### Re-runs & Cache Purge
+1. Purged the cache for both Audits and Applications tables.
+2. Ran a custom reconciliation pass for Audits and Applications only:
+   - Overwrote Bubble cache and stats summary files.
+   - Refreshed all discrepancy maps.
+
+### Final Reconciled Stats
+
+| Table Name | Health Status | SQL Count | Bubble Count | Difference | Missing | Extra | Field Mismatches | Last Synced |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **Audits** | `Warning` | `307,177` | `317,442` | `-10,265` | `5,827` | `2` | `0` | `2026/05/21, 18:18:17` |
+| **Applications** | `Critical` | `149,934` | `156,610` | `-6,676` | `520` | `0` | `0` | `2026/05/13, 13:19:42` |
+
+- **Verification Screenshot**:
+  ![Final Production mode counts](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/prod_mode_counts_1787034342349.png)
