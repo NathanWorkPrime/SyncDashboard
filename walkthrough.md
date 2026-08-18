@@ -197,8 +197,10 @@ We verified that both SQL Server databases (Core and Imports) on the ngrok tunne
 
 | Table Name | Health Status | SQL Count | Bubble Count | Difference | Missing | Extra | Field Mismatches | Last Synced |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **Audits** | `Warning` | `307,177` | `317,442` | `-10,265` | `5,827` | `2` | `0` | `2026/05/21, 18:18:17` |
-| **Applications** | `Critical` | `149,934` | `156,610` | `-6,676` | `520` | `0` | `0` | `2026/05/13, 13:19:42` |
+| **Audits** | `Warning` | `307,177` | `317,442` | `-10,265` | `5,827` | `2` | `0` | `18/08/2026, 10:33:40` |
+| **Applications** | `Critical` | `149,934` | `156,610` | `-6,676` | `520` | `0` | `0` | `18/08/2026, 10:33:40` |
 
 - **Verification Screenshot**:
-  ![Final Production mode counts](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/prod_mode_counts_1787034342349.png)
+  ![Final Production mode counts](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/prod_mode_counts_1787035242694.png)
+- **Watermark Verification Video**:
+  ![Watermark verification video](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/watermarks_verified_1787035163145.webp)

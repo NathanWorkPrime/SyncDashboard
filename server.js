@@ -4426,7 +4426,7 @@ app.post('/reset-sync-time', async (req, res) => {
       console.error(`[reset-sync-time] Bubble PATCH failed: ${bubbleRes.status} ${bubbleText}`);
       return res.status(500).json({ success: false, error: `Bubble error: ${bubbleRes.status}`, detail: bubbleText });
     }
-    console.log(`[reset-sync-time] ✅ ${table} watermark reset to ${parsed.toISOString()} [env: ${isProduction ? 'production' : 'development'}]`);
+    console.log(`[reset-sync-time] ✅ ${table} watermark reset to ${parsed.toISOString()} [env: ${!isDevVersion ? 'production' : 'development'}]`);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
