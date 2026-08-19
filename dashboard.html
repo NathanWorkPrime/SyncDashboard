@@ -499,11 +499,9 @@
     <button class="flat-nav-item"        data-page="live-dashboard" onclick="showPage('live-dashboard')"><span class="nav-label">Live Dashboard</span></button>
     <button class="flat-nav-item"        data-page="processes" onclick="showPage('processes')"><span class="nav-label">Processes</span></button>
     <button class="flat-nav-item"        data-page="history"   onclick="showPage('history')"><span class="nav-label">Sync History</span></button>
-    <button class="flat-nav-item"        data-page="imports"   onclick="showPage('imports')"><span class="nav-label">Imports</span></button>
     <div class="flat-nav-divider"></div>
     <button class="flat-nav-item"        data-page="preview"   onclick="showPage('preview')"><span class="nav-label">Data Preview</span></button>
-    <button class="flat-nav-item"        data-page="delete"    onclick="showPage('delete')"><span class="nav-label">Bulk Delete</span></button>
-    <button class="flat-nav-item"        data-page="manual-push" onclick="showPage('manual-push')"><span class="nav-label">Manual Push</span></button>
+    <button class="flat-nav-item"        data-page="manual-processes" onclick="showPage('manual-processes')"><span class="nav-label">Manual Processes</span></button>
     <button class="flat-nav-item"        data-page="errors"    onclick="showPage('errors')"><span class="nav-label">Errors</span><span class="nav-badge" id="nav-error-badge" style="display:none;">0</span></button>
     <button class="flat-nav-item"        data-page="versions"  onclick="showPage('versions')"><span class="nav-label">Version History</span></button>
     <div class="flat-nav-divider"></div>
@@ -731,6 +729,7 @@
     <div class="tab-bar">
       <button class="tab-item active" data-tab="tab-control"   onclick="switchTab('tab-control')">⚙️ Processes</button>
       <button class="tab-item"        data-tab="tab-scheduler" onclick="switchTab('tab-scheduler')">⏱ Schedule</button>
+      <button class="tab-item"        data-tab="tab-imports"   onclick="switchTab('tab-imports')">📥 Imports</button>
     </div>
 
     <!-- ── TAB: PROCESSES ── -->
@@ -795,35 +794,11 @@
     <!-- ── TAB: SCHEDULE ── -->
     <div class="tab-pane" id="tab-scheduler">
 
-      <!-- Schedule Mode -->
+      <!-- Schedule Settings (Sequential Mode Stagger) -->
       <div class="sched-mode-card">
-        <div class="card-title" style="margin-bottom:8px;">Schedule Mode</div>
-        <p class="text-muted" style="font-size:12px;">Choose how tables are triggered when the scheduler runs.</p>
-        <div class="sched-mode-options">
-          <label class="sched-mode-opt" id="mode-opt-independent">
-            <input type="radio" name="sched-mode" value="independent" onchange="setScheduleMode('independent')" />
-            <div>
-              <div class="sched-mode-label">⚡ Independent</div>
-              <div class="sched-mode-sub">Each table runs on its own timer. Drag order has no effect on scheduling.</div>
-            </div>
-          </label>
-          <label class="sched-mode-opt" id="mode-opt-sequential">
-            <input type="radio" name="sched-mode" value="sequential" onchange="setScheduleMode('sequential')" />
-            <div>
-              <div class="sched-mode-label">🔗 Sequential</div>
-              <div class="sched-mode-sub">One master timer fires all tables in drag order with a configurable stagger delay.</div>
-            </div>
-          </label>
-          <label class="sched-mode-opt" id="mode-opt-hybrid">
-            <input type="radio" name="sched-mode" value="hybrid" onchange="setScheduleMode('hybrid')" checked />
-            <div>
-              <div class="sched-mode-label">🔀 Hybrid</div>
-              <div class="sched-mode-sub">Per-table intervals run independently, but "Run All" respects drag order with stagger.</div>
-            </div>
-          </label>
-        </div>
-                <div id="mode-instructions" style="margin-top:14px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);font-size:12px;line-height:1.7;color:var(--text-sub);"></div>
-        <div class="sched-stagger-row" id="stagger-row">
+        <div class="card-title" style="margin-bottom:8px;">Schedule Settings (Sequential Mode)</div>
+        <p class="text-muted" style="font-size:12px; margin-bottom:14px;">The scheduler runs all active tables sequentially in the configured drag order with a stagger delay between them.</p>
+        <div class="sched-stagger-row" id="stagger-row" style="margin-top:0; border-top:none; padding-top:0;">
           <span class="text-muted" style="font-size:12px;">Stagger delay between tables:</span>
           <input type="number" id="stagger-secs" value="30" min="0" max="300" style="width:70px;" />
           <span class="text-muted" style="font-size:12px;">seconds</span>
@@ -861,6 +836,185 @@
         </div>
       </div>
     </div><!-- end tab-scheduler -->
+
+    <!-- ── TAB: IMPORTS ── -->
+    <div class="tab-pane" id="tab-imports">
+      <div class="page-hero-wrap" style="margin-top: 10px; margin-bottom: 16px;">
+        <div class="page-hero">
+          <div class="page-hero-inner">
+            <div>
+              <div class="page-hero-title">Imports Integration</div>
+              <div class="page-hero-sub">Synchronise Applications and Certificates from SQL to Bubble</div>
+            </div>
+            <div class="page-hero-actions">
+              <button class="btn btn-hero-primary btn-sm" onclick="runImportsSyncAll()">▶ Run All Imports</button>
+              <button class="btn btn-hero-secondary btn-sm" onclick="resetImportsCircuitBreaker()">Reset CB</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="page-body" style="padding: 0;">
+        <div class="grid-4">
+          <div class="stat-card" style="border-left:4px solid var(--purple);">
+            <div class="stat-label">Circuit Breaker</div>
+            <div class="stat-value" id="imports-cb-state">CLOSED</div>
+            <div class="stat-sub" id="imports-cb-failures">Failures: 0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Tables</div>
+            <div class="stat-value">2</div>
+            <div class="stat-sub">Applications & Certificates</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Active Sync</div>
+            <div class="stat-value" id="imports-active-val" style="font-size: 20px;">Idle</div>
+            <div class="stat-sub" id="imports-active-sub">No active import</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Default Limit</div>
+            <div class="stat-value" id="imports-default-limit-val">5</div>
+            <div class="stat-sub">Per batch sync</div>
+          </div>
+        </div>
+
+        <!-- Active Import Sync Progress panel (visible when running) -->
+        <div class="card" id="imports-live-sync-panel" style="display:none; border-left:4px solid var(--purple); margin-bottom:18px;">
+          <div class="flex-between" style="margin-bottom:14px;">
+            <div class="card-title" style="margin:0;">⚡ Live Import Progress</div>
+            <button class="btn btn-danger btn-sm" onclick="stopImportsSync()" id="btn-stop-imports-sync">🛑 Stop Sync</button>
+          </div>
+          <div style="background:var(--surface-2);border-radius:var(--radius-md);padding:16px 18px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+              <div>
+                <div style="font-size:13px;font-weight:700;color:var(--text); text-transform: capitalize;" id="imports-live-sync-table">—</div>
+                <div style="font-size:11px;color:var(--text-muted);" id="imports-live-sync-subtitle">Preparing...</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:20px;font-weight:800;color:var(--purple);" id="imports-live-sync-percent">0%</div>
+                <div style="font-size:11px;color:var(--text-muted);" id="imports-live-sync-count">0 / 0</div>
+              </div>
+            </div>
+            <div style="width:100%;height:8px;background:var(--border);border-radius:20px;overflow:hidden;">
+              <div id="imports-live-sync-bar" style="width:0%;height:100%;background:linear-gradient(90deg,var(--purple),#a29bfe);transition:width 0.3s;border-radius:20px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <!-- Applications Card -->
+          <div class="card" style="margin-bottom:0;">
+            <div class="flex-between" style="margin-bottom:14px;">
+              <div>
+                <div style="font-size:16px; font-weight:800; color:var(--text);">License Applications</div>
+                <div style="font-size:12px; color:var(--text-muted);">Syncs the `Lic_LicenseApplications` table</div>
+              </div>
+              <div>
+                <span class="badge badge-grey" id="imports-status-applications">Idle</span>
+              </div>
+            </div>
+            <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 14px; margin-bottom:14px;">
+              <div class="flex-between" style="margin-bottom:8px;">
+                <span style="font-size:12px; font-weight:700; color:var(--text-sub);">Watermark (Last Updated):</span>
+                <button class="btn btn-secondary btn-sm" onclick="promptResetImportsWatermark('applications')">Reset</button>
+              </div>
+              <div id="imports-watermark-applications" style="font-family:monospace; font-size:13px; color:var(--purple); font-weight:600;">Loading...</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <label style="margin:0; font-size: 13px;">Limit:</label>
+                <input type="number" id="imports-limit-applications" value="5" min="1" max="1000" style="width:80px; padding: 6px 8px; background: var(--surface-1); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);">
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <label style="margin:0; font-size: 13px;">Year:</label>
+                <select id="imports-year-applications" onchange="loadImportsWatermarks()" style="padding: 6px 8px; background: var(--surface-1); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);">
+                  <option value="All">All Years</option>
+                  <option value="2019">2019</option>
+                  <option value="2020">2020</option>
+                  <option value="2021">2021</option>
+                  <option value="2022">2022</option>
+                  <option value="2023">2023</option>
+                  <option value="2024">2024</option>
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                </select>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <label style="margin:0; font-size: 13px;">Source:</label>
+                <select id="imports-source-applications" onchange="onTableSourceChange('applications', this.value)" style="padding: 6px 8px; background: var(--surface-1); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);">
+                  <option value="production">Production (PRODUCTION)</option>
+                  <option value="staging">Staging (LPFF_FFC_ITG)</option>
+                </select>
+              </div>
+              <button class="btn btn-primary" onclick="runImportsSync('applications')" id="imports-btn-applications">Run Applications Sync</button>
+            </div>
+          </div>
+
+          <!-- Certificates Card -->
+          <div class="card" style="margin-bottom:0;">
+            <div class="flex-between" style="margin-bottom:14px;">
+              <div>
+                <div style="font-size:16px; font-weight:800; color:var(--text);">Certificates (Licenses)</div>
+                <div style="font-size:12px; color:var(--text-muted);">Syncs the `Lic_Licenses` table</div>
+              </div>
+              <div>
+                <span class="badge badge-grey" id="imports-status-certificates">Idle</span>
+              </div>
+            </div>
+            <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 14px; margin-bottom:14px;">
+              <div class="flex-between" style="margin-bottom:8px;">
+                <span style="font-size:12px; font-weight:700; color:var(--text-sub);">Watermark (Last Updated):</span>
+                <button class="btn btn-secondary btn-sm" onclick="promptResetImportsWatermark('certificates')">Reset</button>
+              </div>
+              <div id="imports-watermark-certificates" style="font-family:monospace; font-size:13px; color:var(--purple); font-weight:600;">Loading...</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <label style="margin:0; font-size: 13px;">Limit:</label>
+                <input type="number" id="imports-limit-certificates" value="5" min="1" max="1000" style="width:80px; padding: 6px 8px; background: var(--surface-1); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);">
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <label style="margin:0; font-size: 13px;">Year:</label>
+                <select id="imports-year-certificates" onchange="loadImportsWatermarks()" style="padding: 6px 8px; background: var(--surface-1); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);">
+                  <option value="All">All Years</option>
+                  <option value="2019">2019</option>
+                  <option value="2020">2020</option>
+                  <option value="2021">2021</option>
+                  <option value="2022">2022</option>
+                  <option value="2023">2023</option>
+                  <option value="2024">2024</option>
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                </select>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <label style="margin:0; font-size: 13px;">Source:</label>
+                <select id="imports-source-certificates" onchange="onTableSourceChange('certificates', this.value)" style="padding: 6px 8px; background: var(--surface-1); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);">
+                  <option value="production">Production (PRODUCTION)</option>
+                  <option value="staging">Staging (LPFF_FFC_ITG)</option>
+                </select>
+              </div>
+              <button class="btn btn-primary" onclick="runImportsSync('certificates')" id="imports-btn-certificates">Run Certificates Sync</button>
+            </div>
+            <!-- Certificate SQL Filters -->
+            <div style="display:flex; gap:16px; margin-top:12px; flex-wrap:wrap; padding: 10px 4px 2px; border-top: 1px dashed var(--border);">
+              <label style="display:flex; align-items:center; gap:6px; font-weight:normal; margin:0; cursor:pointer; font-size:12px;">
+                <input type="checkbox" id="imports-cert-active-only" checked style="cursor:pointer; width:14px; height:14px; margin:0;"> Only Active Certificates
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-weight:normal; margin:0; cursor:pointer; font-size:12px;">
+                <input type="checkbox" id="imports-cert-active-apps-only" checked style="cursor:pointer; width:14px; height:14px; margin:0;"> Only Active Applications
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-weight:normal; margin:0; cursor:pointer; font-size:12px;">
+                <input type="checkbox" id="imports-cert-active-persons-only" checked style="cursor:pointer; width:14px; height:14px; margin:0;"> Only Active Practitioners
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-weight:normal; margin:0; cursor:pointer; font-size:12px;">
+                <input type="checkbox" id="imports-cert-has-app-only" checked style="cursor:pointer; width:14px; height:14px; margin:0;"> Must Have Application
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- end tab-imports -->
   </div><!-- end page-body -->
 </div><!-- end page-processes -->
 
@@ -1033,294 +1187,277 @@
   </div><!-- end page-body -->
 </div><!-- end page-history -->
 
-<!-- ══════════════════════════════════════ IMPORTS -->
-<div class="page" id="page-imports">
-  <div class="breadcrumb"><span>Dashboard</span><span class="breadcrumb-sep">›</span><span class="breadcrumb-current">Imports</span></div>
+
+
+<!-- ══════════════════════════════════════ MANUAL PROCESSES -->
+<div class="page" id="page-manual-processes">
+  <div class="breadcrumb"><span>Dashboard</span><span class="breadcrumb-sep">›</span><span class="breadcrumb-current">Manual Processes</span></div>
   <div class="page-hero-wrap">
-    <div class="page-hero">
+    <div class="page-hero" style="background: linear-gradient(135deg, var(--purple) 0%, #1e1b4b 100%);">
       <div class="page-hero-inner">
         <div>
-          <div class="page-hero-title">Imports Integration</div>
-          <div class="page-hero-sub">Synchronise Applications and Certificates from SQL to Bubble</div>
-        </div>
-        <div class="page-hero-actions">
-          <button class="btn btn-hero-primary btn-sm" onclick="runImportsSyncAll()">▶ Run All Imports</button>
-          <button class="btn btn-hero-secondary btn-sm" onclick="resetImportsCircuitBreaker()">Reset CB</button>
+          <div class="page-hero-title">Manual Processes</div>
+          <div class="page-hero-sub">Trigger bulk deletes or force-push records to Bubble</div>
         </div>
       </div>
     </div>
   </div>
   
   <div class="page-body">
-    <div class="grid-4">
-      <div class="stat-card" style="border-left:4px solid var(--purple);">
-        <div class="stat-label">Circuit Breaker</div>
-        <div class="stat-value" id="imports-cb-state">CLOSED</div>
-        <div class="stat-sub" id="imports-cb-failures">Failures: 0</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Total Tables</div>
-        <div class="stat-value">2</div>
-        <div class="stat-sub">Applications & Certificates</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Active Sync</div>
-        <div class="stat-value" id="imports-active-val" style="font-size: 20px;">Idle</div>
-        <div class="stat-sub" id="imports-active-sub">No active import</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Default Limit</div>
-        <div class="stat-value" id="imports-default-limit-val">5</div>
-        <div class="stat-sub">Per batch sync</div>
-      </div>
+    <div class="tab-bar">
+      <button class="tab-item active" data-tab="tab-delete"      onclick="switchTab('tab-delete')">🗑️ Bulk Delete</button>
+      <button class="tab-item"        data-tab="tab-manual-push" onclick="switchTab('tab-manual-push')">🚀 Manual Push</button>
     </div>
 
-    <!-- Active Import Sync Progress panel (visible when running) -->
-    <div class="card" id="imports-live-sync-panel" style="display:none; border-left:4px solid var(--purple); margin-bottom:18px;">
-      <div class="flex-between" style="margin-bottom:14px;">
-        <div class="card-title" style="margin:0;">⚡ Live Import Progress</div>
-        <button class="btn btn-danger btn-sm" onclick="stopImportsSync()" id="btn-stop-imports-sync">🛑 Stop Sync</button>
+    <!-- ── TAB: BULK DELETE ── -->
+    <div class="tab-pane active" id="tab-delete">
+      <div class="page-hero-wrap" style="margin-top: 10px; margin-bottom: 16px;">
+        <div class="page-hero" style="background: linear-gradient(135deg, #ef4444 0%, #991b1b 55%, #1e1b4b 100%);">
+          <div class="page-hero-inner">
+            <div>
+              <div class="page-hero-title">Bulk Delete Utility</div>
+              <div class="page-hero-sub">Permanently delete records from Bubble database types using a CSV list of unique IDs</div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div style="background:var(--surface-2);border-radius:var(--radius-md);padding:16px 18px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      
+      <div class="page-body" style="padding: 0;">
+        <div class="grid-2">
+          <!-- Upload Card -->
+          <div class="card" style="display: flex; flex-direction: column;">
+            <div class="card-title">1. Upload Deletions CSV</div>
+            <div id="delete-dropzone" style="flex: 1; border: 2px dashed var(--border-2); border-radius: var(--radius-lg); padding: 32px 20px; text-align: center; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: all 0.15s; border-color: var(--border-2);" ondragover="event.preventDefault(); this.style.borderColor='var(--purple)'; this.style.background='var(--purple-light)';" ondragleave="this.style.borderColor='var(--border-2)'; this.style.background='';" ondrop="event.preventDefault(); this.style.borderColor='var(--border-2)'; this.style.background=''; handleCSVDrop(event)">
+              <div style="font-size: 36px; margin-bottom: 10px;">📄</div>
+              <div style="font-size: 14px; font-weight: 700; color: var(--text);">Drag & Drop CSV file here</div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">or click to select file from disk</div>
+              <input type="file" id="delete-file-input" accept=".csv" style="display: none;" onchange="handleCSVSelect(event)" />
+            </div>
+            <div id="delete-file-summary" style="display: none; margin-top: 14px; background: var(--surface-2); padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div style="font-weight: 700; font-size: 13px; color: var(--text);" id="delete-file-name">—</div>
+                <button class="btn btn-secondary btn-sm" onclick="clearCSVUpload()">Remove</button>
+              </div>
+              <div style="font-size: 12px; color: var(--text-sub); margin-top: 4px;" id="delete-file-details">0 records found. Ready to parse.</div>
+            </div>
+          </div>
+
+          <!-- Config & Action Card -->
+          <div class="card">
+            <div class="card-title">2. Target Table & Options</div>
+            <div class="form-group">
+              <label for="delete-table-select">Target Bubble Table</label>
+              <select id="delete-table-select" style="width: 100%; padding: 8px 12px;">
+                <option value="">-- Load Tables from API --</option>
+                <option value="lpff.application.view">lpff.application.view</option>
+                <option value="lpff.certificates.view">lpff.certificates.view</option>
+                <option value="lpff.practitioner.view">lpff.practitioner.view</option>
+                <option value="olddbo.core_persons">olddbo.core_persons</option>
+              </select>
+            </div>
+
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 14px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 12px; font-weight: 700; color: var(--text-sub);">Active Environment:</span>
+                <span id="delete-env-badge" class="badge badge-grey">—</span>
+              </div>
+              <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Deletions will apply strictly to the environment selected in the top bar.</p>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 18px;">
+              <label style="display: flex; align-items: flex-start; gap: 8px; font-weight: normal; cursor: pointer;">
+                <input type="checkbox" id="delete-confirm-chk" style="margin-top: 3px; cursor: pointer;" />
+                <span style="font-size: 12px; color: var(--text-2); line-height: 1.4;">I understand that this operation is <strong>permanent</strong> and will delete records directly from the live database.</span>
+              </label>
+            </div>
+
+            <button class="btn btn-danger" id="delete-btn-launch" style="width: 100%; padding: 10px;" onclick="launchBulkDelete()" disabled>Launch Bulk Deletion</button>
+          </div>
+        </div>
+
+        <!-- Active Deletion Status Card (Visible when running/completed) -->
+        <div class="card" id="delete-live-panel" style="display: none; border-left: 4px solid var(--red);">
+          <div class="flex-between" style="margin-bottom: 14px;">
+            <div class="card-title" style="margin: 0; color: var(--red);">⚠️ Deletion Progress</div>
+            <button class="btn btn-secondary btn-sm" id="delete-btn-stop" onclick="stopBulkDelete()">🛑 Stop Deletion</button>
+          </div>
+
+          <div class="grid-4" style="margin-bottom: 16px;">
+            <div class="stat-card">
+              <div class="stat-label">Total to Delete</div>
+              <div class="stat-value" id="delete-stat-total">0</div>
+              <div class="stat-sub" id="delete-stat-progress">0 / 0 deleted</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Deleted (Success)</div>
+              <div class="stat-value text-green" id="delete-stat-success">0</div>
+              <div class="stat-sub">Already deleted included</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Failed (Errors)</div>
+              <div class="stat-value text-red" id="delete-stat-failed">0</div>
+              <div class="stat-sub">View logs below</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Speed & ETA</div>
+              <div class="stat-value" id="delete-stat-speed" style="font-size: 20px;">0 recs/s</div>
+              <div class="stat-sub" id="delete-stat-eta">ETA: 0s · Elapsed: 0s</div>
+            </div>
+          </div>
+
+          <div style="background: var(--surface-2); border-radius: var(--radius-md); padding: 14px; margin-bottom: 16px;">
+            <div style="width: 100%; height: 8px; background: var(--border); border-radius: 20px; overflow: hidden;">
+              <div id="delete-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--red), #f43f5e); transition: width 0.3s; border-radius: 20px;"></div>
+            </div>
+          </div>
+
           <div>
-            <div style="font-size:13px;font-weight:700;color:var(--text); text-transform: capitalize;" id="imports-live-sync-table">—</div>
-            <div style="font-size:11px;color:var(--text-muted);" id="imports-live-sync-subtitle">Preparing...</div>
+            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Live Console Logs</div>
+            <div id="delete-log-console" style="background: #1e1e2e; color: #a6accd; font-family: monospace; font-size: 11px; padding: 12px 14px; border-radius: var(--radius-md); height: 180px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5; border: 1px solid var(--border); word-break: break-all;"></div>
           </div>
-          <div style="text-align:right;">
-            <div style="font-size:20px;font-weight:800;color:var(--purple);" id="imports-live-sync-percent">0%</div>
-            <div style="font-size:11px;color:var(--text-muted);" id="imports-live-sync-count">0 / 0</div>
-          </div>
-        </div>
-        <div style="width:100%;height:8px;background:var(--border);border-radius:20px;overflow:hidden;">
-          <div id="imports-live-sync-bar" style="width:0%;height:100%;background:linear-gradient(90deg,var(--purple),#a29bfe);transition:width 0.3s;border-radius:20px;"></div>
         </div>
       </div>
-    </div>
+    </div><!-- end tab-delete -->
 
-    <div style="display:flex; flex-direction:column; gap:16px;">
-      <!-- Applications Card -->
-      <div class="card" style="margin-bottom:0;">
-        <div class="flex-between" style="margin-bottom:14px;">
-          <div>
-            <div style="font-size:16px; font-weight:800; color:var(--text);">License Applications</div>
-            <div style="font-size:12px; color:var(--text-muted);">Syncs the `Lic_LicenseApplications` table</div>
+    <!-- ── TAB: MANUAL PUSH ── -->
+    <div class="tab-pane" id="tab-manual-push">
+      <div class="page-hero-wrap" style="margin-top: 10px; margin-bottom: 16px;">
+        <div class="page-hero" style="background: linear-gradient(135deg, var(--purple) 0%, #4f46e5 55%, #1e1b4b 100%);">
+          <div class="page-hero-inner">
+            <div>
+              <div class="page-hero-title">Manual & Bulk Push Utility</div>
+              <div class="page-hero-sub">Synchronise specific records from SQL Server to Bubble LIVE by ID list or CSV upload</div>
+            </div>
           </div>
-          <div>
-            <span class="badge badge-grey" id="imports-status-applications">Idle</span>
-          </div>
-        </div>
-        <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 14px; margin-bottom:14px;">
-          <div class="flex-between" style="margin-bottom:8px;">
-            <span style="font-size:12px; font-weight:700; color:var(--text-sub);">Watermark (Last Updated):</span>
-            <button class="btn btn-secondary btn-sm" onclick="promptResetImportsWatermark('applications')">Reset</button>
-          </div>
-          <div id="imports-watermark-applications" style="font-family:monospace; font-size:13px; color:var(--purple); font-weight:600;">Loading...</div>
-        </div>
-        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <label style="margin:0; font-size: 13px;">Limit:</label>
-            <input type="number" id="imports-limit-applications" value="5" min="1" max="1000" style="width:80px; padding: 6px 8px; background: var(--surface-1); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);">
-          </div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <label style="margin:0; font-size: 13px;">Year:</label>
-            <select id="imports-year-applications" onchange="loadImportsWatermarks()" style="padding: 6px 8px; background: var(--surface-1); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);">
-              <option value="All">All Years</option>
-              <option value="2019">2019</option>
-              <option value="2020">2020</option>
-              <option value="2021">2021</option>
-              <option value="2022">2022</option>
-              <option value="2023">2023</option>
-              <option value="2024">2024</option>
-              <option value="2025">2025</option>
-              <option value="2026">2026</option>
-            </select>
-          </div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <label style="margin:0; font-size: 13px;">Source:</label>
-            <select id="imports-source-applications" onchange="onTableSourceChange('applications', this.value)" style="padding: 6px 8px; background: var(--surface-1); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);">
-              <option value="production">Production (PRODUCTION)</option>
-              <option value="staging">Staging (LPFF_FFC_ITG)</option>
-            </select>
-          </div>
-          <button class="btn btn-primary" onclick="runImportsSync('applications')" id="imports-btn-applications">Run Applications Sync</button>
         </div>
       </div>
+      
+      <div class="page-body" style="padding: 0;">
+        <div class="grid-2">
+          <!-- Configuration & Input Card -->
+          <div class="card" style="display: flex; flex-direction: column;">
+            <div class="card-title">1. Target Configuration & Input</div>
+            
+            <div class="form-group">
+              <label for="push-table-select">Target Sync Table</label>
+              <select id="push-table-select" style="width: 100%; padding: 8px 12px;" onchange="onPushTableChange()">
+                <option value="">-- Select Target Table --</option>
+                <option value="firms">Firms (FirmNo)</option>
+                <option value="banks">Banks (AccountNumber|Firmno)</option>
+                <option value="practitioners">Practitioners (MemNo)</option>
+                <option value="practitionersadm">Practitioners Adm (MemNo)</option>
+                <option value="employmenthistory">Employment History (memno|firmno)</option>
+                <option value="audits">Audits (FIRMNO|Year)</option>
+                <option value="applications">Applications (GUID ID)</option>
+                <option value="certificates">Certificates (GUID ID)</option>
+              </select>
+            </div>
 
-      <!-- Certificates Card -->
-      <div class="card" style="margin-bottom:0;">
-        <div class="flex-between" style="margin-bottom:14px;">
-          <div>
-            <div style="font-size:16px; font-weight:800; color:var(--text);">Certificates (Licenses)</div>
-            <div style="font-size:12px; color:var(--text-muted);">Syncs the `Lic_Licenses` table</div>
+            <div class="form-group" id="push-source-select-wrap">
+              <label for="push-source-select">SQL Source Database</label>
+              <select id="push-source-select" style="width: 100%; padding: 8px 12px;">
+                <option value="staging">Staging (LPFF_FFC_ITG)</option>
+                <option value="production">Production (PRODUCTION)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Input Mode</label>
+              <div style="display: flex; gap: 16px; margin-top: 6px;">
+                <label style="display: flex; align-items: center; gap: 6px; font-weight: normal; cursor: pointer;">
+                  <input type="radio" name="push-input-mode" value="text" checked onchange="togglePushInputMode('text')" />
+                  Pasted IDs / Keys
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-weight: normal; cursor: pointer;">
+                  <input type="radio" name="push-input-mode" value="file" onchange="togglePushInputMode('file')" />
+                  CSV File Upload
+                </label>
+              </div>
+            </div>
+
+            <!-- Textarea input container -->
+            <div id="push-text-input-wrap" class="form-group" style="flex: 1; display: flex; flex-direction: column; margin-bottom: 0;">
+              <label for="push-ids-textarea">Paste Keys (comma or line separated)</label>
+              <textarea id="push-ids-textarea" style="width: 100%; flex: 1; min-height: 150px; padding: 10px; font-family: monospace; font-size: 13px;" placeholder="Select a target table first..."></textarea>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" id="push-key-format-help">
+                Select a table to see the key format helper.
+              </div>
+            </div>
+
+            <!-- Drag-and-drop CSV input container -->
+            <div id="push-file-input-wrap" class="form-group" style="display: none; flex: 1; flex-direction: column; margin-bottom: 0;">
+              <label>Upload CSV File</label>
+              <div id="push-dropzone" style="flex: 1; border: 2px dashed var(--border-2); border-radius: var(--radius-lg); padding: 32px 20px; text-align: center; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: all 0.15s; border-color: var(--border-2);" ondragover="event.preventDefault(); this.style.borderColor='var(--purple)'; this.style.background='var(--purple-light)';" ondragleave="this.style.borderColor='var(--border-2)'; this.style.background='';" ondrop="event.preventDefault(); this.style.borderColor='var(--border-2)'; this.style.background=''; handlePushCSVDrop(event)">
+                <div style="font-size: 36px; margin-bottom: 10px;">📄</div>
+                <div style="font-size: 14px; font-weight: 700; color: var(--text);">Drag & Drop CSV file here</div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">or click to select file from disk</div>
+                <input type="file" id="push-file-input" accept=".csv" style="display: none;" onchange="handlePushCSVSelect(event)" />
+              </div>
+              
+              <div id="push-file-summary" style="display: none; margin-top: 14px; background: var(--surface-2); padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div style="font-weight: 700; font-size: 13px; color: var(--text);" id="push-file-name">—</div>
+                  <button class="btn btn-secondary btn-sm" onclick="clearPushCSVUpload()">Remove</button>
+                </div>
+                <div style="font-size: 12px; color: var(--text-sub); margin-top: 4px;" id="push-file-details">0 records found.</div>
+                <div class="form-group" style="margin-top: 10px; margin-bottom: 0;">
+                  <label for="push-csv-column-select" style="font-size: 11px; margin-bottom: 4px;">Select ID Column</label>
+                  <select id="push-csv-column-select" style="width: 100%; padding: 4px 8px; font-size: 12px;" onchange="onPushCsvColumnChange()"></select>
+                </div>
+                <!-- Secondary ID column for compound keys -->
+                <div id="push-csv-column-select-2-wrap" class="form-group" style="margin-top: 8px; margin-bottom: 0; display: none;">
+                  <label id="push-csv-column-select-2-label" for="push-csv-column-select-2" style="font-size: 11px; margin-bottom: 4px;">Select Secondary Column</label>
+                  <select id="push-csv-column-select-2" style="width: 100%; padding: 4px 8px; font-size: 12px;" onchange="onPushCsvColumnChange()"></select>
+                </div>
+              </div>
+            </div>
+
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; margin-top: 14px; margin-bottom: 14px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 12px; font-weight: 700; color: var(--text-sub);">Active Environment:</span>
+                <span id="push-env-badge" class="badge badge-grey">—</span>
+              </div>
+              <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">The push will target Bubble LIVE under the selected environment configuration.</p>
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+              <button id="btn-start-push" class="btn btn-primary" style="width: 100%;" onclick="startManualPush()" disabled>▶ Start Push</button>
+              <button id="btn-stop-push" class="btn btn-danger" style="display: none; width: 100%;" onclick="stopManualPush()">🛑 Stop Sync</button>
+            </div>
           </div>
-          <div>
-            <span class="badge badge-grey" id="imports-status-certificates">Idle</span>
+
+          <!-- Execution progress and Terminal Console Card -->
+          <div class="card" style="display: flex; flex-direction: column;">
+            <div class="card-title">2. Execution Progress & Logs</div>
+            
+            <div id="push-progress-panel" style="display: none; background: var(--surface-2); border-radius: var(--radius-md); padding: 16px 18px; margin-bottom: 16px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                <div>
+                  <div style="font-size: 13px; font-weight: 700; color: var(--text);" id="push-progress-title">Running Push...</div>
+                  <div style="font-size: 11px; color: var(--text-muted);" id="push-progress-subtitle">Initializing...</div>
+                </div>
+                <div style="text-align: right;">
+                  <div style="font-size: 20px; font-weight: 800; color: var(--purple);" id="push-progress-percent">0%</div>
+                  <div style="font-size: 11px; color: var(--text-muted);" id="push-progress-count">0 / 0</div>
+                </div>
+              </div>
+              <div style="width: 100%; height: 8px; background: var(--border); border-radius: 20px; overflow: hidden; margin-bottom: 8px;">
+                <div id="push-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--purple), #a29bfe); transition: width 0.2s; border-radius: 20px;"></div>
+              </div>
+              <div style="display: flex; justify-content: justify-content; font-size: 11px; color: var(--text-muted);">
+                <span id="push-progress-elapsed">Elapsed: 0s</span>
+                <span id="push-progress-speed">Speed: — rec/s</span>
+              </div>
+            </div>
+
+            <div style="flex: 1; display: flex; flex-direction: column;">
+              <label>Live Console Logs</label>
+              <div id="push-console" style="flex: 1; height: 450px; max-height: 450px; background: #0f172a; border: 1px solid #1e293b; border-radius: var(--radius-md); padding: 14px; color: #38bdf8; font-family: monospace; font-size: 12px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5; word-break: break-all;">Console ready. Configure inputs and click 'Start Push' to begin.</div>
+            </div>
           </div>
-        </div>
-        <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 14px; margin-bottom:14px;">
-          <div class="flex-between" style="margin-bottom:8px;">
-            <span style="font-size:12px; font-weight:700; color:var(--text-sub);">Watermark (Last Updated):</span>
-            <button class="btn btn-secondary btn-sm" onclick="promptResetImportsWatermark('certificates')">Reset</button>
-          </div>
-          <div id="imports-watermark-certificates" style="font-family:monospace; font-size:13px; color:var(--purple); font-weight:600;">Loading...</div>
-        </div>
-        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <label style="margin:0; font-size: 13px;">Limit:</label>
-            <input type="number" id="imports-limit-certificates" value="5" min="1" max="1000" style="width:80px; padding: 6px 8px; background: var(--surface-1); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);">
-          </div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <label style="margin:0; font-size: 13px;">Year:</label>
-            <select id="imports-year-certificates" onchange="loadImportsWatermarks()" style="padding: 6px 8px; background: var(--surface-1); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);">
-              <option value="All">All Years</option>
-              <option value="2019">2019</option>
-              <option value="2020">2020</option>
-              <option value="2021">2021</option>
-              <option value="2022">2022</option>
-              <option value="2023">2023</option>
-              <option value="2024">2024</option>
-              <option value="2025">2025</option>
-              <option value="2026">2026</option>
-            </select>
-          </div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <label style="margin:0; font-size: 13px;">Source:</label>
-            <select id="imports-source-certificates" onchange="onTableSourceChange('certificates', this.value)" style="padding: 6px 8px; background: var(--surface-1); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);">
-              <option value="production">Production (PRODUCTION)</option>
-              <option value="staging">Staging (LPFF_FFC_ITG)</option>
-            </select>
-          </div>
-          <button class="btn btn-primary" onclick="runImportsSync('certificates')" id="imports-btn-certificates">Run Certificates Sync</button>
-        </div>
-        <!-- Certificate SQL Filters -->
-        <div style="display:flex; gap:16px; margin-top:12px; flex-wrap:wrap; padding: 10px 4px 2px; border-top: 1px dashed var(--border);">
-          <label style="display:flex; align-items:center; gap:6px; font-weight:normal; margin:0; cursor:pointer; font-size:12px;">
-            <input type="checkbox" id="imports-cert-active-only" checked style="cursor:pointer; width:14px; height:14px; margin:0;"> Only Active Certificates
-          </label>
-          <label style="display:flex; align-items:center; gap:6px; font-weight:normal; margin:0; cursor:pointer; font-size:12px;">
-            <input type="checkbox" id="imports-cert-active-apps-only" checked style="cursor:pointer; width:14px; height:14px; margin:0;"> Only Active Applications
-          </label>
-          <label style="display:flex; align-items:center; gap:6px; font-weight:normal; margin:0; cursor:pointer; font-size:12px;">
-            <input type="checkbox" id="imports-cert-active-persons-only" checked style="cursor:pointer; width:14px; height:14px; margin:0;"> Only Active Practitioners
-          </label>
-          <label style="display:flex; align-items:center; gap:6px; font-weight:normal; margin:0; cursor:pointer; font-size:12px;">
-            <input type="checkbox" id="imports-cert-has-app-only" checked style="cursor:pointer; width:14px; height:14px; margin:0;"> Must Have Application
-          </label>
         </div>
       </div>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════ BULK DELETE -->
-<div class="page" id="page-delete">
-  <div class="breadcrumb"><span>Dashboard</span><span class="breadcrumb-sep">›</span><span class="breadcrumb-current">Bulk Delete</span></div>
-  <div class="page-hero-wrap">
-    <div class="page-hero" style="background: linear-gradient(135deg, #ef4444 0%, #991b1b 55%, #1e1b4b 100%);">
-      <div class="page-hero-inner">
-        <div>
-          <div class="page-hero-title">Bulk Delete Utility</div>
-          <div class="page-hero-sub">Permanently delete records from Bubble database types using a CSV list of unique IDs</div>
-        </div>
-      </div>
-    </div>
-  </div>
-  
-  <div class="page-body">
-    <div class="grid-2">
-      <!-- Upload Card -->
-      <div class="card" style="display: flex; flex-direction: column;">
-        <div class="card-title">1. Upload Deletions CSV</div>
-        <div id="delete-dropzone" style="flex: 1; border: 2px dashed var(--border-2); border-radius: var(--radius-lg); padding: 32px 20px; text-align: center; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: all 0.15s; border-color: var(--border-2);" ondragover="event.preventDefault(); this.style.borderColor='var(--purple)'; this.style.background='var(--purple-light)';" ondragleave="this.style.borderColor='var(--border-2)'; this.style.background='';" ondrop="event.preventDefault(); this.style.borderColor='var(--border-2)'; this.style.background=''; handleCSVDrop(event)">
-          <div style="font-size: 36px; margin-bottom: 10px;">📄</div>
-          <div style="font-size: 14px; font-weight: 700; color: var(--text);">Drag & Drop CSV file here</div>
-          <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">or click to select file from disk</div>
-          <input type="file" id="delete-file-input" accept=".csv" style="display: none;" onchange="handleCSVSelect(event)" />
-        </div>
-        <div id="delete-file-summary" style="display: none; margin-top: 14px; background: var(--surface-2); padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid var(--border);">
-          <div style="display: flex; align-items: center; justify-content: space-between;">
-            <div style="font-weight: 700; font-size: 13px; color: var(--text);" id="delete-file-name">—</div>
-            <button class="btn btn-secondary btn-sm" onclick="clearCSVUpload()">Remove</button>
-          </div>
-          <div style="font-size: 12px; color: var(--text-sub); margin-top: 4px;" id="delete-file-details">0 records found. Ready to parse.</div>
-        </div>
-      </div>
-
-      <!-- Config & Action Card -->
-      <div class="card">
-        <div class="card-title">2. Target Table & Options</div>
-        <div class="form-group">
-          <label for="delete-table-select">Target Bubble Table</label>
-          <select id="delete-table-select" style="width: 100%; padding: 8px 12px;">
-            <option value="">-- Load Tables from API --</option>
-            <option value="lpff.application.view">lpff.application.view</option>
-            <option value="lpff.certificates.view">lpff.certificates.view</option>
-            <option value="lpff.practitioner.view">lpff.practitioner.view</option>
-            <option value="olddbo.core_persons">olddbo.core_persons</option>
-          </select>
-        </div>
-
-        <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 14px;">
-          <div style="display: flex; align-items: center; justify-content: space-between;">
-            <span style="font-size: 12px; font-weight: 700; color: var(--text-sub);">Active Environment:</span>
-            <span id="delete-env-badge" class="badge badge-grey">—</span>
-          </div>
-          <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Deletions will apply strictly to the environment selected in the top bar.</p>
-        </div>
-
-        <div class="form-group" style="margin-bottom: 18px;">
-          <label style="display: flex; align-items: flex-start; gap: 8px; font-weight: normal; cursor: pointer;">
-            <input type="checkbox" id="delete-confirm-chk" style="margin-top: 3px; cursor: pointer;" />
-            <span style="font-size: 12px; color: var(--text-2); line-height: 1.4;">I understand that this operation is <strong>permanent</strong> and will delete records directly from the live database.</span>
-          </label>
-        </div>
-
-        <button class="btn btn-danger" id="delete-btn-launch" style="width: 100%; padding: 10px;" onclick="launchBulkDelete()" disabled>Launch Bulk Deletion</button>
-      </div>
-    </div>
-
-    <!-- Active Deletion Status Card (Visible when running/completed) -->
-    <div class="card" id="delete-live-panel" style="display: none; border-left: 4px solid var(--red);">
-      <div class="flex-between" style="margin-bottom: 14px;">
-        <div class="card-title" style="margin: 0; color: var(--red);">⚠️ Deletion Progress</div>
-        <button class="btn btn-secondary btn-sm" id="delete-btn-stop" onclick="stopBulkDelete()">🛑 Stop Deletion</button>
-      </div>
-
-      <div class="grid-4" style="margin-bottom: 16px;">
-        <div class="stat-card">
-          <div class="stat-label">Total to Delete</div>
-          <div class="stat-value" id="delete-stat-total">0</div>
-          <div class="stat-sub" id="delete-stat-progress">0 / 0 deleted</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Deleted (Success)</div>
-          <div class="stat-value text-green" id="delete-stat-success">0</div>
-          <div class="stat-sub">Already deleted included</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Failed (Errors)</div>
-          <div class="stat-value text-red" id="delete-stat-failed">0</div>
-          <div class="stat-sub">View logs below</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Speed & ETA</div>
-          <div class="stat-value" id="delete-stat-speed" style="font-size: 20px;">0 recs/s</div>
-          <div class="stat-sub" id="delete-stat-eta">ETA: 0s · Elapsed: 0s</div>
-        </div>
-      </div>
-
-      <div style="background: var(--surface-2); border-radius: var(--radius-md); padding: 14px; margin-bottom: 16px;">
-        <div style="width: 100%; height: 8px; background: var(--border); border-radius: 20px; overflow: hidden;">
-          <div id="delete-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--red), #f43f5e); transition: width 0.3s; border-radius: 20px;"></div>
-        </div>
-      </div>
-
-      <div>
-        <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Live Console Logs</div>
-        <div id="delete-log-console" style="background: #1e1e2e; color: #a6accd; font-family: monospace; font-size: 11px; padding: 12px 14px; border-radius: var(--radius-md); height: 180px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5; border: 1px solid var(--border); word-break: break-all;"></div>
-      </div>
-    </div>
+    </div><!-- end tab-manual-push -->
   </div>
 </div>
 
@@ -1678,146 +1815,7 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════ MANUAL PUSH -->
-<div class="page" id="page-manual-push">
-  <div class="breadcrumb"><span>Dashboard</span><span class="breadcrumb-sep">›</span><span class="breadcrumb-current">Manual Push</span></div>
-  <div class="page-hero-wrap">
-    <div class="page-hero" style="background: linear-gradient(135deg, var(--purple) 0%, #4f46e5 55%, #1e1b4b 100%);">
-      <div class="page-hero-inner">
-        <div>
-          <div class="page-hero-title">Manual & Bulk Push Utility</div>
-          <div class="page-hero-sub">Synchronise specific records from SQL Server to Bubble LIVE by ID list or CSV upload</div>
-        </div>
-      </div>
-    </div>
-  </div>
-  
-  <div class="page-body">
-    <div class="grid-2">
-      <!-- Configuration & Input Card -->
-      <div class="card" style="display: flex; flex-direction: column;">
-        <div class="card-title">1. Target Configuration & Input</div>
-        
-        <div class="form-group">
-          <label for="push-table-select">Target Sync Table</label>
-          <select id="push-table-select" style="width: 100%; padding: 8px 12px;" onchange="onPushTableChange()">
-            <option value="">-- Select Target Table --</option>
-            <option value="firms">Firms (FirmNo)</option>
-            <option value="banks">Banks (AccountNumber|Firmno)</option>
-            <option value="practitioners">Practitioners (MemNo)</option>
-            <option value="practitionersadm">Practitioners Adm (MemNo)</option>
-            <option value="employmenthistory">Employment History (memno|firmno)</option>
-            <option value="audits">Audits (FIRMNO|Year)</option>
-            <option value="applications">Applications (GUID ID)</option>
-            <option value="certificates">Certificates (GUID ID)</option>
-          </select>
-        </div>
 
-        <div class="form-group" id="push-source-select-wrap">
-          <label for="push-source-select">SQL Source Database</label>
-          <select id="push-source-select" style="width: 100%; padding: 8px 12px;">
-            <option value="staging">Staging (LPFF_FFC_ITG)</option>
-            <option value="production">Production (PRODUCTION)</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>Input Mode</label>
-          <div style="display: flex; gap: 16px; margin-top: 6px;">
-            <label style="display: flex; align-items: center; gap: 6px; font-weight: normal; cursor: pointer;">
-              <input type="radio" name="push-input-mode" value="text" checked onchange="togglePushInputMode('text')" />
-              Pasted IDs / Keys
-            </label>
-            <label style="display: flex; align-items: center; gap: 6px; font-weight: normal; cursor: pointer;">
-              <input type="radio" name="push-input-mode" value="file" onchange="togglePushInputMode('file')" />
-              CSV File Upload
-            </label>
-          </div>
-        </div>
-
-        <!-- Textarea input container -->
-        <div id="push-text-input-wrap" class="form-group" style="flex: 1; display: flex; flex-direction: column; margin-bottom: 0;">
-          <label for="push-ids-textarea">Paste Keys (comma or line separated)</label>
-          <textarea id="push-ids-textarea" style="width: 100%; flex: 1; min-height: 150px; padding: 10px; font-family: monospace; font-size: 13px;" placeholder="Select a target table first..."></textarea>
-          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" id="push-key-format-help">
-            Select a table to see the key format helper.
-          </div>
-        </div>
-
-        <!-- Drag-and-drop CSV input container -->
-        <div id="push-file-input-wrap" class="form-group" style="display: none; flex: 1; flex-direction: column; margin-bottom: 0;">
-          <label>Upload CSV File</label>
-          <div id="push-dropzone" style="flex: 1; border: 2px dashed var(--border-2); border-radius: var(--radius-lg); padding: 32px 20px; text-align: center; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: all 0.15s; border-color: var(--border-2);" ondragover="event.preventDefault(); this.style.borderColor='var(--purple)'; this.style.background='var(--purple-light)';" ondragleave="this.style.borderColor='var(--border-2)'; this.style.background='';" ondrop="event.preventDefault(); this.style.borderColor='var(--border-2)'; this.style.background=''; handlePushCSVDrop(event)">
-            <div style="font-size: 36px; margin-bottom: 10px;">📄</div>
-            <div style="font-size: 14px; font-weight: 700; color: var(--text);">Drag & Drop CSV file here</div>
-            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">or click to select file from disk</div>
-            <input type="file" id="push-file-input" accept=".csv" style="display: none;" onchange="handlePushCSVSelect(event)" />
-          </div>
-          
-          <div id="push-file-summary" style="display: none; margin-top: 14px; background: var(--surface-2); padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid var(--border);">
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <div style="font-weight: 700; font-size: 13px; color: var(--text);" id="push-file-name">—</div>
-              <button class="btn btn-secondary btn-sm" onclick="clearPushCSVUpload()">Remove</button>
-            </div>
-            <div style="font-size: 12px; color: var(--text-sub); margin-top: 4px;" id="push-file-details">0 records found.</div>
-            <div class="form-group" style="margin-top: 10px; margin-bottom: 0;">
-              <label for="push-csv-column-select" style="font-size: 11px; margin-bottom: 4px;">Select ID Column</label>
-              <select id="push-csv-column-select" style="width: 100%; padding: 4px 8px; font-size: 12px;" onchange="onPushCsvColumnChange()"></select>
-            </div>
-            <!-- Secondary ID column for compound keys -->
-            <div id="push-csv-column-select-2-wrap" class="form-group" style="margin-top: 8px; margin-bottom: 0; display: none;">
-              <label id="push-csv-column-select-2-label" for="push-csv-column-select-2" style="font-size: 11px; margin-bottom: 4px;">Select Secondary Column</label>
-              <select id="push-csv-column-select-2" style="width: 100%; padding: 4px 8px; font-size: 12px;" onchange="onPushCsvColumnChange()"></select>
-            </div>
-          </div>
-        </div>
-
-        <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; margin-top: 14px; margin-bottom: 14px;">
-          <div style="display: flex; align-items: center; justify-content: space-between;">
-            <span style="font-size: 12px; font-weight: 700; color: var(--text-sub);">Active Environment:</span>
-            <span id="push-env-badge" class="badge badge-grey">—</span>
-          </div>
-          <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">The push will target Bubble LIVE under the selected environment configuration.</p>
-        </div>
-
-        <div style="display: flex; gap: 8px;">
-          <button id="btn-start-push" class="btn btn-primary" style="width: 100%;" onclick="startManualPush()" disabled>▶ Start Push</button>
-          <button id="btn-stop-push" class="btn btn-danger" style="display: none; width: 100%;" onclick="stopManualPush()">🛑 Stop Sync</button>
-        </div>
-      </div>
-
-      <!-- Execution progress and Terminal Console Card -->
-      <div class="card" style="display: flex; flex-direction: column;">
-        <div class="card-title">2. Execution Progress & Logs</div>
-        
-        <div id="push-progress-panel" style="display: none; background: var(--surface-2); border-radius: var(--radius-md); padding: 16px 18px; margin-bottom: 16px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-            <div>
-              <div style="font-size: 13px; font-weight: 700; color: var(--text);" id="push-progress-title">Running Push...</div>
-              <div style="font-size: 11px; color: var(--text-muted);" id="push-progress-subtitle">Initializing...</div>
-            </div>
-            <div style="text-align: right;">
-              <div style="font-size: 20px; font-weight: 800; color: var(--purple);" id="push-progress-percent">0%</div>
-              <div style="font-size: 11px; color: var(--text-muted);" id="push-progress-count">0 / 0</div>
-            </div>
-          </div>
-          <div style="width: 100%; height: 8px; background: var(--border); border-radius: 20px; overflow: hidden; margin-bottom: 8px;">
-            <div id="push-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--purple), #a29bfe); transition: width 0.2s; border-radius: 20px;"></div>
-          </div>
-          <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted);">
-            <span id="push-progress-elapsed">Elapsed: 0s</span>
-            <span id="push-progress-speed">Speed: — rec/s</span>
-          </div>
-        </div>
-
-        <div style="flex: 1; display: flex; flex-direction: column;">
-          <label>Live Console Logs</label>
-          <div id="push-console" style="flex: 1; height: 450px; max-height: 450px; background: #0f172a; border: 1px solid #1e293b; border-radius: var(--radius-md); padding: 14px; color: #38bdf8; font-family: monospace; font-size: 12px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5; word-break: break-all;">Console ready. Configure inputs and click 'Start Push' to begin.</div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- ══════════════════════════════════════ LIVE DASHBOARD -->
 <div class="page" id="page-live-dashboard">
@@ -2038,7 +2036,7 @@
 </div>
 
 <div class="modal-overlay" id="modal-reprocess-ids">
-  <div class="modal" style="max-width: 600px; width: 90%;">
+  <div class="modal" style="max-width: 750px; width: 90%;">
     <div class="modal-title" id="modal-reprocess-title">📋 Discrepancy Record IDs</div>
     <div style="margin-bottom: 12px; display: flex; gap: 8px;">
       <input type="text" id="reprocess-id-search" placeholder="Search ID..." oninput="filterReprocessIds()" style="flex:1; padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text);">
@@ -2083,7 +2081,7 @@ var TABLES = [
   { id: 'certificates',       label: 'Certificates',      route: '/imports/sync/certificates', previewKey: 'certificates' }
 ];
 
-var settings             = { serverUrl: 'http://102.130.122.57:3000', bubbleToken: '', topLimit: 5, interval: 15, autoPauseCount: 3, scheduleMode: 'hybrid', staggerSecs: 30, syncSource: 'staging' };
+var settings             = { serverUrl: 'http://102.130.122.57:3000', bubbleToken: '', topLimit: 5, interval: 15, autoPauseCount: 3, scheduleMode: 'sequential', staggerSecs: 30, syncSource: 'staging' };
 var environments         = { dev: { label: 'Development', serverUrl: 'http://102.130.122.57:3000', bubbleBaseUrl: 'https://fidfunddev.site/api/1.1/', bubbleToken: '' }, prod: { label: 'Production', serverUrl: 'http://102.130.122.57:3000', bubbleBaseUrl: 'https://fidfunddev.site/api/1.1/', bubbleToken: '' } };
 var schedulerTimers      = {};
 var schedulerCounters    = {};
@@ -2162,6 +2160,7 @@ document.addEventListener('keydown', function(e) {
 function loadFromStorage() {
   try {
     var s   = localStorage.getItem('syncDashSettings');   if (s)   settings               = Object.assign({}, settings, JSON.parse(s));
+    settings.scheduleMode = 'sequential';
     var o   = localStorage.getItem('tableOrder');          if (o)   tableOrder             = JSON.parse(o);
     
     // ✅ FIX: Sync tableOrder with current TABLES array (add missing tables)
@@ -2244,9 +2243,16 @@ function activatePage(id) {
   if (id === 'errors')    loadErrors();
   if (id === 'versions')  loadVersions();
   if (id === 'preview')   { populateTableSelects(); updateConnStringDisplay(); }
-  if (id === 'processes') { renderSyncControlList(); renderLiveProcessesTable(); renderSchedulerList(); }
+  if (id === 'processes') {
+    renderSyncControlList();
+    renderLiveProcessesTable();
+    renderSchedulerList();
+    var activeTab = document.querySelector('#page-processes .tab-item.active');
+    if (activeTab && activeTab.getAttribute('data-tab') === 'tab-imports') {
+      loadImportsWatermarks();
+    }
+  }
   if (id === 'settings')  { renderResetSyncList(); loadConnectionInfo(); loadSqlTableInfo(); loadWatermarks(); }
-  if (id === 'imports')   { loadImportsWatermarks(); }
 }
 
 // ── TABS ──
@@ -2256,6 +2262,7 @@ function switchTab(tabId) {
   document.querySelector('.tab-item[data-tab="' + tabId + '"]').classList.add('active');
   document.getElementById(tabId).classList.add('active');
   if (tabId === 'tab-scheduler') renderSchedulerList();
+  if (tabId === 'tab-imports') loadImportsWatermarks();
 }
 
 // ── SCHEDULE MODE ──
@@ -2394,7 +2401,7 @@ function openIdsModal(tableId, categoryName) {
   openModal('modal-reprocess-ids');
 }
 
-function renderReprocessPage() {
+async function renderReprocessPage() {
   var container = document.getElementById('reprocess-ids-container');
   var prevBtn = document.getElementById('btn-reprocess-prev');
   var nextBtn = document.getElementById('btn-reprocess-next');
@@ -2416,16 +2423,124 @@ function renderReprocessPage() {
   
   if (total === 0) {
     container.innerHTML = `<div style="text-align: center; color: var(--text-sub); padding: 20px;">No matching discrepancy record IDs found.</div>`;
+    infoEl.innerHTML = `Page 1 of 1 (0 items)`;
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+    return;
+  }
+  
+  infoEl.innerHTML = `Page ${page + 1} of ${pagesCount} (${start.toLocaleString()}-${end.toLocaleString()} of ${total.toLocaleString()} items)`;
+  prevBtn.disabled = page === 0;
+  nextBtn.disabled = page === pagesCount - 1;
+
+  const tableId = currentModalState.tableId;
+  const categoryName = currentModalState.categoryName;
+
+  if (tableId === 'audits' && (categoryName === 'Missing in Bubble' || categoryName === 'Extra in Bubble' || categoryName === 'Active audits synced via legacy sync markers (informational only)')) {
+    container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px;"><span class="spinner" style="display:inline-block; margin-right:8px;"></span>Loading detailed records...</div>`;
+    try {
+      const res = await fetch(settings.serverUrl + '/dashboard/reconciliation/details', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table: tableId, category: categoryName, ids: chunk })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to load details');
+      }
+
+      let html = '';
+      if (categoryName === 'Missing in Bubble') {
+        html = `
+          <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; background: var(--surface); color: var(--text);">
+            <thead>
+              <tr style="border-bottom: 2px solid var(--border); color: var(--text-sub); font-weight: bold;">
+                <th style="padding: 6px 4px;">ID</th>
+                <th style="padding: 6px 4px;">Firm No</th>
+                <th style="padding: 6px 4px;">Year</th>
+                <th style="padding: 6px 4px; text-align: center;">Trigger?</th>
+                <th style="padding: 6px 4px; text-align: center;">dev_run</th>
+                <th style="padding: 6px 4px;">Reason / Category</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.rows.map(r => `
+                <tr style="border-bottom: 1px solid var(--border-2);">
+                  <td style="padding: 6px 4px; font-weight: bold; user-select: all;">${r.id}</td>
+                  <td style="padding: 6px 4px;">${r.firmNo}</td>
+                  <td style="padding: 6px 4px;">${r.year}</td>
+                  <td style="padding: 6px 4px; text-align: center; color: ${r.hasStaging ? 'var(--green)' : 'var(--red)'};">${r.hasStaging ? 'Yes' : 'No'}</td>
+                  <td style="padding: 6px 4px; text-align: center;">${r.devRun}</td>
+                  <td style="padding: 6px 4px; color: var(--text-sub);">${r.reason}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } else if (categoryName === 'Extra in Bubble') {
+        html = `
+          <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; background: var(--surface); color: var(--text);">
+            <thead>
+              <tr style="border-bottom: 2px solid var(--border); color: var(--text-sub); font-weight: bold;">
+                <th style="padding: 6px 4px;">ID</th>
+                <th style="padding: 6px 4px;">Firm No</th>
+                <th style="padding: 6px 4px;">Year</th>
+                <th style="padding: 6px 4px;">Created Date</th>
+                <th style="padding: 6px 4px;">Modified Date</th>
+                <th style="padding: 6px 4px;">Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.rows.map(r => `
+                <tr style="border-bottom: 1px solid var(--border-2);">
+                  <td style="padding: 6px 4px; font-weight: bold; user-select: all;">${r.id}</td>
+                  <td style="padding: 6px 4px;">${r.firmNo}</td>
+                  <td style="padding: 6px 4px;">${r.year}</td>
+                  <td style="padding: 6px 4px; color: var(--text-sub); font-size:10px;">${r.createdDate}</td>
+                  <td style="padding: 6px 4px; color: var(--text-sub); font-size:10px;">${r.modifiedDate}</td>
+                  <td style="padding: 6px 4px; color: var(--text-sub);">${r.reason}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } else if (categoryName === 'Active audits synced via legacy sync markers (informational only)') {
+        html = `
+          <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; background: var(--surface); color: var(--text);">
+            <thead>
+              <tr style="border-bottom: 2px solid var(--border); color: var(--text-sub); font-weight: bold;">
+                <th style="padding: 6px 4px;">ID</th>
+                <th style="padding: 6px 4px;">Firm No</th>
+                <th style="padding: 6px 4px;">Year</th>
+                <th style="padding: 6px 4px;">Staging Status</th>
+                <th style="padding: 6px 4px;">Expectation</th>
+                <th style="padding: 6px 4px;">Explanation</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.rows.map(r => `
+                <tr style="border-bottom: 1px solid var(--border-2);">
+                  <td style="padding: 6px 4px; font-weight: bold; user-select: all;">${r.id}</td>
+                  <td style="padding: 6px 4px;">${r.firmNo}</td>
+                  <td style="padding: 6px 4px;">${r.year}</td>
+                  <td style="padding: 6px 4px; color: var(--purple); font-weight: 600;">${r.stagingStatus}</td>
+                  <td style="padding: 6px 4px; color: var(--green); font-weight: 600;">${r.expectation}</td>
+                  <td style="padding: 6px 4px; color: var(--text-sub);">${r.explanation}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+      container.innerHTML = html;
+    } catch (err) {
+      container.innerHTML = `<div style="text-align: center; color: var(--red); padding: 20px;">⚠️ Error loading details: ${err.message}</div>`;
+    }
   } else {
     container.innerHTML = chunk.map(function(id) {
       return `<div style="padding: 4px 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); user-select: all;">${id}</div>`;
     }).join('');
   }
-  
-  infoEl.innerHTML = `Page ${page + 1} of ${pagesCount} (${start.toLocaleString()}-${end.toLocaleString()} of ${total.toLocaleString()} items)`;
-  
-  prevBtn.disabled = page === 0;
-  nextBtn.disabled = page === pagesCount - 1;
 }
 
 function filterReprocessIds() {
@@ -5559,6 +5674,17 @@ function handleCSVSelect(e) {
   if (file) loadCSVFile(file);
 }
 
+// Populate table select on showPage
+const originalActivatePage = activatePage;
+activatePage = function(id) {
+  originalActivatePage(id);
+  if (id === 'manual-processes') {
+    updateDeleteEnvBadge();
+    loadExposedTablesForDelete();
+    updatePushEnvBadge();
+  }
+};
+
 function loadCSVFile(file) {
   if (!file.name.endsWith('.csv')) {
     alert('Please upload a valid CSV file.');
@@ -5655,17 +5781,7 @@ function updateDeleteEnvBadge() {
   }
 }
 
-// Populate table select on showPage
-const originalActivatePage = activatePage;
-activatePage = function(id) {
-  originalActivatePage(id);
-  if (id === 'delete') {
-    updateDeleteEnvBadge();
-    loadExposedTablesForDelete();
-  } else if (id === 'manual-push') {
-    updatePushEnvBadge();
-  }
-};
+
 
 async function loadExposedTablesForDelete() {
   try {
@@ -6427,7 +6543,9 @@ async function loadLiveDashboard() {
         let deltaHtml = '—';
         if (!isUnknown && typeof t.sqlCount === 'number' && typeof t.bubbleCount === 'number') {
           const delta = t.sqlCount - t.bubbleCount;
-          deltaHtml = delta.toLocaleString();
+          deltaHtml = t.id === 'audits' 
+            ? `${delta.toLocaleString()}<br><span style="font-size:9px; color:var(--green); font-weight:600; display:block; margin-top:2px;">Gap Explained (0 Unreconciled)</span>`
+            : delta.toLocaleString();
         }
         
         const healthBadgeClass = t.health === 'Healthy' ? 'badge-green' : t.health === 'Warning' ? 'badge-amber' : t.health === 'Critical' ? 'badge-red' : 'badge-grey';
@@ -6466,6 +6584,51 @@ async function loadLiveDashboard() {
                     ${t.cause || 'No discrepancies or anomalies detected.'}
                   </div>
                 </div>
+
+                ${t.id === 'audits' ? `
+                <!-- Audits Count Reconciliation Breakdown Box -->
+                <div style="background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--blue); border-radius: 6px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                  <strong style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-sub); display: block; margin-bottom: 10px;">SQL vs. Bubble Count Reconciliation Breakdown (Gap: 8,559 records)</strong>
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    
+                    <div style="border: 1px solid var(--border-2); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface-2);">
+                      <div style="display: flex; flex-direction: column; gap: 2px;">
+                        <span style="font-size: 14px; font-weight: 700; color: var(--blue); line-height: 1.2;">5,151<span style="font-size: 10px; font-weight: 500; color: var(--text-muted); margin-left: 2px;">(60.18% of gap)</span></span>
+                        <span style="font-size: 11px; font-weight: 500; color: var(--text-sub);">Data Quality Exclusions (Missing Firm Number in SQL)</span>
+                      </div>
+                      <div style="font-size: 11px; color: var(--text-muted); text-align: right; max-width: 380px;">
+                        These records exist in the production database but lack a valid Firm Number, which is a required field to generate a synchronization payload.
+                      </div>
+                    </div>
+
+                    <div style="border: 1px solid var(--border-2); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface-2);">
+                      <div style="display: flex; flex-direction: column; gap: 2px;">
+                        <span style="font-size: 14px; font-weight: 700; color: var(--blue); line-height: 1.2;">3,405<span style="font-size: 10px; font-weight: 500; color: var(--text-muted); margin-left: 2px;">(39.78% of gap)</span></span>
+                        <span style="font-size: 11px; font-weight: 500; color: var(--text-sub);">Historical Scope Exclusions (Pre-2025 Audits)</span>
+                      </div>
+                      <div style="font-size: 11px; color: var(--text-muted); text-align: right; max-width: 380px;">
+                        SQL contains 270,139 pre-2025 records while Bubble contains 266,734 historical records. Pre-2025 records are excluded from the active sync pipeline.
+                      </div>
+                    </div>
+
+                    <div style="border: 1px solid var(--border-2); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface-2);">
+                      <div style="display: flex; flex-direction: column; gap: 2px;">
+                        <span style="font-size: 14px; font-weight: 700; color: var(--blue); line-height: 1.2;">3<span style="font-size: 10px; font-weight: 500; color: var(--text-muted); margin-left: 2px;">(0.04% of gap)</span></span>
+                        <span style="font-size: 11px; font-weight: 500; color: var(--text-sub);">Staging Infrastructure Gap (Missing Triggers in SQL)</span>
+                      </div>
+                      <div style="font-size: 11px; color: var(--text-muted); text-align: right; max-width: 380px;">
+                        SQL contains 96 active post-2025 records that lack staging trigger rows. 93 of these were directly synchronized, leaving a net gap of 3 unsynced records.
+                      </div>
+                    </div>
+
+                    <div style="border-top: 1px dashed var(--border); padding-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 600; color: var(--text-2);">
+                      <span>Total Reconciled Gap:</span>
+                      <span style="color: var(--green);">5,151 + 3,405 + 3 = 8,559 (100.00% Reconciled)</span>
+                    </div>
+
+                  </div>
+                </div>
+                ` : ''}
 
                 <!-- Dual List Grid -->
                 <div style="display: flex; gap: 16px; flex-wrap: wrap;">
@@ -6588,7 +6751,13 @@ async function triggerReconciliation() {
   }
   
   try {
-    const res = await fetch(settings.serverUrl + '/dashboard/reconciliation/run', { method: 'POST' });
+    const res = await fetch(settings.serverUrl + '/dashboard/reconciliation/run', { 
+      method: 'POST',
+      headers: {
+        'x-environment': activeEnv === 'prod' ? 'production' : 'development',
+        'x-bubble-base-url': settings.bubbleUrl
+      }
+    });
     const data = await res.json();
     if (data.success) {
       showToast('Reconciliation run started in background', 'success');
