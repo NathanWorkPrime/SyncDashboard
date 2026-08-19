@@ -6579,8 +6579,8 @@ async function doSyncApplications(topLimit = 5, trigger = 'manual', bubbleBase =
         a.Aff_IsLicenseWithdrawn, a.Aff_IsReOpened, a.Aff_InformationIsVerified
       FROM Lic_LicenseApplications a
       INNER JOIN Core_Periods p ON a.PeriodId = p.Id
-      INNER JOIN Core_Persons pe ON pe.Id = a.ApplicantId AND pe.Frwk_InactiveFlag = 0
-      WHERE a.Frwk_InactiveFlag = 0
+      INNER JOIN Core_Persons pe ON pe.Id = a.ApplicantId
+      WHERE 1=1
     `;
 
     if (validCustomIds && validCustomIds.length > 0) {
@@ -6620,6 +6620,22 @@ async function doSyncApplications(topLimit = 5, trigger = 'manual', bubbleBase =
       message: `Found ${records.length} records. Syncing to Bubble...`
     });
 
+    const activeBubbleIds = new Set();
+    const cacheFile = '.cache_lpff.application.view.' + (isProduction ? 'prod' : 'dev') + '.json';
+    const cachePath = path.join('D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment', cacheFile);
+    if (fs.existsSync(cachePath)) {
+      try {
+        const bubbleRecords = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+        bubbleRecords.forEach(r => {
+          const id = String(r['ID'] || r['id'] || '').trim().toLowerCase();
+          if (id) activeBubbleIds.add(id);
+        });
+        console.log(`[doSyncApplications] Loaded ${activeBubbleIds.size} existing Bubble IDs from cache.`);
+      } catch (err) {
+        console.warn(`[doSyncApplications] Failed to load Bubble cache: ${err.message}`);
+      }
+    }
+
     let success = 0;
     let errors = 0;
     let latestTimestamp = lastSync;
@@ -6644,6 +6660,14 @@ async function doSyncApplications(topLimit = 5, trigger = 'manual', bubbleBase =
       }
 
       const record = records[i];
+      const isInactive = record.Frwk_InactiveFlag === 1 || record.Frwk_InactiveFlag === true;
+      if (isInactive) {
+        const lowerId = String(record.Id || '').trim().toLowerCase();
+        if (!activeBubbleIds.has(lowerId)) {
+          latestTimestamp = record.Frwk_LastUpdatedTimestamp ? record.Frwk_LastUpdatedTimestamp.toISOString() : latestTimestamp;
+          continue;
+        }
+      }
       try {
         const payload = {
           Id: record.Id,
@@ -6734,7 +6758,7 @@ async function doSyncApplications(topLimit = 5, trigger = 'manual', bubbleBase =
       }
     }
 
-    if (success > 0) {
+    if (success > 0 || latestTimestamp !== lastSync) {
       saveImportsWatermark('applications', latestTimestamp, activeYear);
     }
 
