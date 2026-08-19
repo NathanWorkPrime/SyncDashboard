@@ -771,47 +771,73 @@
     <!-- ── TAB: SCHEDULE ── -->
     <div class="tab-pane" id="tab-scheduler">
 
-      <!-- Schedule Settings (Sequential Mode Stagger) -->
-      <div class="sched-mode-card">
-        <div class="card-title" style="margin-bottom:8px;">Schedule Settings (Sequential Mode)</div>
-        <p class="text-muted" style="font-size:12px; margin-bottom:14px;">The scheduler runs all active tables sequentially in the configured drag order with a stagger delay between them.</p>
-        <div class="sched-stagger-row" id="stagger-row" style="margin-top:0; border-top:none; padding-top:0;">
-          <span class="text-muted" style="font-size:12px;">Stagger delay between tables:</span>
-          <input type="number" id="stagger-secs" value="30" min="0" max="300" style="width:70px;" />
-          <span class="text-muted" style="font-size:12px;">seconds</span>
-          <button class="btn btn-secondary btn-sm" onclick="saveStagger()">Save</button>
-          <span class="text-muted" style="font-size:11px;" id="stagger-preview"></span>
+      <!-- Consolidated Scheduler Control Panel -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title">Scheduler Controls & Settings</div>
+        <p class="text-muted" style="font-size:12px; margin-bottom:16px;">Configure global scheduling parameters and control the sequential runner.</p>
+        
+        <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; margin-bottom: 16px;">
+          <!-- Left Column: Timing & Rule Settings -->
+          <div>
+            <div style="font-weight: 700; font-size: 13px; color: var(--text-sub); margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px;">⏱️ Cycle & Stagger Settings</div>
+            
+            <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+              <span class="text-muted" style="font-size: 12px; width: 160px; display: inline-block;">Global Cycle Interval:</span>
+              <input type="number" id="global-interval" value="15" min="1" style="width: 80px;" />
+              <span class="text-muted" style="font-size: 12px;">minutes</span>
+              <button class="btn btn-secondary btn-sm" onclick="saveGlobalInterval()">Save</button>
+            </div>
+            
+            <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+              <span class="text-muted" style="font-size: 12px; width: 160px; display: inline-block;">Inter-table Stagger Delay:</span>
+              <input type="number" id="stagger-secs" value="30" min="0" max="300" style="width: 80px;" />
+              <span class="text-muted" style="font-size: 12px;">seconds</span>
+              <button class="btn btn-secondary btn-sm" onclick="saveStagger()">Save</button>
+            </div>
+            
+            <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+              <span class="text-muted" style="font-size: 12px; width: 160px; display: inline-block;">Auto-pause on failure:</span>
+              <input type="number" id="auto-pause-count" value="3" min="1" max="20" style="width: 80px;" />
+              <span class="text-muted" style="font-size: 12px;">failures</span>
+              <button class="btn btn-secondary btn-sm" onclick="saveAutoPause()">Save</button>
+            </div>
+          </div>
+          
+          <!-- Right Column: Master Scheduler Controls -->
+          <div style="border-left: 1px solid var(--border); padding-left: 20px;">
+            <div style="font-weight: 700; font-size: 13px; color: var(--text-sub); margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px;">⚙️ Master Controls</div>
+            <div style="margin-bottom: 16px; display: flex; gap: 8px;">
+              <button class="btn btn-success btn-sm" onclick="startAllSchedulers(true)">▶ Start Scheduler</button>
+              <button class="btn btn-danger btn-sm" onclick="stopAllSchedulers()">■ Stop Scheduler</button>
+            </div>
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px;">
+              <div style="font-size: 12px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px;">
+                <span>Status:</span>
+                <span id="scheduler-master-status-badge" class="badge badge-grey">Inactive</span>
+              </div>
+              <p style="font-size: 11px; color: var(--text-muted); margin-top: 6px; line-height: 1.4;">
+                When active, all tables sync sequentially in the order shown below. The global interval countdown starts only after the last table finishes.
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Dev Run Lock UI Component -->
+        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <div style="font-size: 12px; font-weight: 700; color: var(--text);">Legacy dev_run Write-back Integration</div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Sync status feedback write-back loop to legacy SQL database rows.</div>
+          </div>
+          <span class="badge badge-grey" style="font-size: 11px; padding: 6px 12px; border: 1px dashed var(--border);">Write-back to dev_run: Disabled — code-level lock, cannot be enabled from this UI</span>
         </div>
       </div>
 
-      <!-- Global Interval -->
+      <!-- Per-Table Sequence -->
       <div class="card" style="margin-bottom:16px;">
-        <div class="card-title">Global Interval</div>
-        <div class="flex gap-12" style="align-items:center;">
-          <input type="number" id="global-interval" value="15" min="1" style="width:100px;" />
-          <span class="text-muted">minutes — applies to all tables unless overridden</span>
-          <button class="btn btn-secondary btn-sm" onclick="saveGlobalInterval()">Save</button>
-          <button class="btn btn-success btn-sm"   onclick="startAllSchedulers(true)">▶ Start All</button>
-          <button class="btn btn-danger btn-sm"    onclick="stopAllSchedulers()">■ Stop All</button>
-        </div>
-      </div>
-
-      <!-- Per-Table Schedule -->
-      <div class="card" style="margin-bottom:16px;">
-        <div class="card-title">Per-Table Schedule</div>
+        <div class="card-title">Per-Table Sequence (Drag to Reorder)</div>
         <div id="scheduler-list"></div>
       </div>
 
-      <!-- Auto-Pause Rules -->
-      <div class="card">
-        <div class="card-title">Auto-Pause Rules</div>
-        <div class="flex gap-12" style="align-items:center;flex-wrap:wrap;">
-          <span class="text-muted">Auto-pause a table after</span>
-          <input type="number" id="auto-pause-count" value="3" min="1" max="20" style="width:70px;" />
-          <span class="text-muted">consecutive failures</span>
-          <button class="btn btn-secondary btn-sm" onclick="saveAutoPause()">Save</button>
-        </div>
-      </div>
     </div><!-- end tab-scheduler -->
 
     <!-- ── TAB: IMPORTS ── -->
@@ -1648,6 +1674,15 @@
       <div class="sinfo-value" id="sinfo-env">—</div>
     </div>
   </div>
+
+  <!-- Dev Run Lock UI Component -->
+  <div style="margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+    <div>
+      <div style="font-size: 12px; font-weight: 700; color: var(--text);">Legacy dev_run Write-back Integration</div>
+      <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Sync status feedback write-back loop to legacy SQL database rows.</div>
+    </div>
+    <span class="badge badge-grey" style="font-size: 11px; padding: 6px 12px; border: 1px dashed var(--border);">Write-back to dev_run: Disabled — code-level lock, cannot be enabled from this UI</span>
+  </div>
 </div>
 
       <div class="card">
@@ -2002,6 +2037,9 @@ var TABLES = [
 var settings             = { serverUrl: 'http://102.130.122.57:3000', bubbleToken: '', topLimit: 5, interval: 15, autoPauseCount: 3, scheduleMode: 'sequential', staggerSecs: 30, syncSource: 'staging' };
 var environments         = { dev: { label: 'Development', serverUrl: 'http://102.130.122.57:3000', bubbleBaseUrl: 'https://fidfunddev.site/api/1.1/', bubbleToken: '' }, prod: { label: 'Production', serverUrl: 'http://102.130.122.57:3000', bubbleBaseUrl: 'https://fidfunddev.site/api/1.1/', bubbleToken: '' } };
 var schedulerTimers      = {};
+var schedulerMasterActive = false;
+var schedulerCurrentTable = null;
+var schedulerNextRunTime  = null;
 var schedulerCounters    = {};
 var schedulerCountdowns  = {};
 var consecutiveFails     = {};
@@ -2057,6 +2095,7 @@ window.addEventListener('DOMContentLoaded', function() {
   loadErrors();
   syncSchedulerStatusFromServer();
   updateStaggerPreview();
+  setInterval(syncSchedulerStatusFromServer, 5000);
   overviewRefreshTimer = setInterval(function() {
   checkServer();
   if (document.getElementById('page-overview').classList.contains('active')) loadOverviewStats();
@@ -4628,16 +4667,11 @@ function runDryAll() {
 function renderSchedulerList() {
   var el = document.getElementById('scheduler-list');
   if (!el) return;
-  var mode         = settings.scheduleMode || 'hybrid';
-  var showOrder    = (mode === 'sequential' || mode === 'hybrid');
-  var showInterval = (mode === 'independent' || mode === 'hybrid');
-  var showDrag     = (mode === 'sequential' || mode === 'hybrid');
+  var showDrag     = true;
+  var showOrder    = true;
 
   el.innerHTML = getOrderedTables().map(function(t, i) {
-    var interval  = tableIntervalOverrides[t.id] || settings.interval;
-    var isRunning = !!schedulerTimers[t.id];
     var isPaused  = !!tablePaused[t.id];
-    var countdown = schedulerCountdowns[t.id] || 0;
 
     var dragHandle = showDrag
       ? '<span class="sched-drag-handle" title="Drag to reorder">⠿</span>'
@@ -4647,14 +4681,6 @@ function renderSchedulerList() {
       ? '<span class="sched-order-badge">#' + (i + 1) + '</span>'
       : '';
 
-    var intervalInput = showInterval
-      ? '<div style="display:flex;align-items:center;gap:8px;">'
-      +   '<span style="font-size:12px;color:var(--text-muted);">Every</span>'
-      +   '<input type="number" value="' + interval + '" min="1" style="width:65px;" onchange="setTableInterval(\'' + t.id + '\',this.value)" />'
-      +   '<span style="font-size:12px;color:var(--text-muted);">min</span>'
-      + '</div>'
-      : '<div style="min-width:120px;font-size:12px;color:var(--text-muted);">Global interval applies</div>';
-
     var sourceVal = tableSourceOverrides[t.id] || settings.syncSource || 'staging';
     var sourceSelectHtml = '<div style="display:flex;align-items:center;gap:6px;">'
       + '<span style="font-size:12px;color:var(--text-muted);">Source:</span>'
@@ -4662,6 +4688,35 @@ function renderSchedulerList() {
       + '<option value="staging" ' + (sourceVal === 'staging' ? 'selected' : '') + '>Staging</option>'
       + '<option value="production" ' + (sourceVal === 'production' ? 'selected' : '') + '>Prod</option>'
       + '</select></div>';
+
+    // Compute sequential scheduler status
+    var countdownVal = '<span style="color:var(--text-muted);">⚪ Waiting</span>';
+    if (schedulerMasterActive) {
+      if (schedulerCurrentTable === t.id) {
+        countdownVal = '<span style="color:var(--green);font-weight:700;">🟡 Syncing...</span>';
+      } else if (schedulerCurrentTable) {
+        var order = getOrderedTables().map(function(tbl){ return tbl.id; });
+        var runningIndex = order.indexOf(schedulerCurrentTable);
+        var selfIndex = order.indexOf(t.id);
+        if (selfIndex < runningIndex) {
+          countdownVal = '<span style="color:var(--green);">✓ Completed</span>';
+        } else {
+          countdownVal = '<span style="color:var(--text-muted);">⚪ Waiting</span>';
+        }
+      } else if (schedulerNextRunTime) {
+        var diff = new Date(schedulerNextRunTime) - new Date();
+        if (diff > 0) {
+          var sec = Math.ceil(diff / 1000);
+          var min = Math.floor(sec / 60);
+          sec = sec % 60;
+          countdownVal = '⏳ ' + min + 'm ' + sec + 's';
+        } else {
+          countdownVal = '⏳ Starting...';
+        }
+      }
+    } else {
+      countdownVal = '—';
+    }
 
     return '<div class="scheduler-row" draggable="' + showDrag + '" data-id="' + t.id + '"'
       + ' ondragstart="schedDragStart(event)" ondragover="schedDragOver(event)" ondrop="schedDrop(event)">'
@@ -4671,14 +4726,8 @@ function renderSchedulerList() {
       +   t.label
       +   (isPaused ? ' <span class="badge badge-amber" style="font-size:10px;margin-left:4px;">Paused</span>' : '')
       + '</div>'
-      + intervalInput
       + sourceSelectHtml
-      + '<div class="countdown" id="countdown-' + t.id + '">' + (isRunning ? formatCountdown(countdown) : '—') + '</div>'
-      + '<div class="flex gap-8">'
-      +   (isRunning
-          ? '<button class="btn btn-danger btn-sm" onclick="stopScheduler(\'' + t.id + '\')">■ Stop</button>'
-          : '<button class="btn btn-success btn-sm" onclick="startScheduler(\'' + t.id + '\')" ' + (isPaused ? 'disabled title="Resume table first"' : '') + '>▶ Start</button>')
-      + '</div>'
+      + '<div class="countdown" id="countdown-' + t.id + '" style="margin-left:auto;font-family:monospace;font-size:12px;font-weight:700;">' + countdownVal + '</div>'
       + '</div>';
   }).join('');
 }
@@ -4798,9 +4847,8 @@ function startAllSchedulers(userInitiated) {
   if (!userInitiated) return;
   var tables   = getOrderedTables().filter(function(t){ return !tablePaused[t.id]; });
   var order    = tables.map(function(t){ return t.id; });
-  var mode     = settings.scheduleMode || 'sequential';
   var interval = parseInt(document.getElementById('global-interval').value) || parseInt(document.getElementById('setting-interval').value) || settings.interval;
-  var stagger  = settings.staggerSecs || 30;
+  var stagger  = parseInt(document.getElementById('stagger-secs').value) || settings.staggerSecs || 30;
   var topLimit = settings.topLimit || 5;
   var sources = {};
   tables.forEach(function(t) {
@@ -4813,16 +4861,14 @@ function startAllSchedulers(userInitiated) {
       'x-bubble-base-url': settings.bubbleBaseUrl || environments[activeEnv].bubbleBaseUrl || 'https://fidfunddev.site/api/1.1/',
       'x-environment':     activeEnv === 'prod' ? 'production' : 'development'
     },
-    body: JSON.stringify({ mode: mode, order: order, staggerSecs: stagger, intervalMinutes: interval, topLimit: topLimit, sources: sources })
+    body: JSON.stringify({ mode: 'sequential', order: order, staggerSecs: stagger, intervalMinutes: interval, topLimit: topLimit, sources: sources })
   })
   .then(function(r){ return r.json(); })
   .then(function(d) {
     if (d.success) {
-      toast('▶ ' + mode.charAt(0).toUpperCase() + mode.slice(1) + ' scheduler started — ' + tables.length + ' tables, every ' + interval + ' min');
-      addNotification('info', mode + ' scheduler started for ' + tables.length + ' tables');
-      tables.forEach(function(t){ if (!schedulerTimers[t.id]) startSchedulerLocal(t.id, interval); });
-      renderSchedulerList();
-      renderLiveProcessesTable();
+      toast('▶ Sequential scheduler started');
+      addNotification('info', 'Sequential scheduler started');
+      syncSchedulerStatusFromServer();
     } else {
       toast('⚠ Scheduler start failed');
     }
@@ -4838,11 +4884,9 @@ function stopAllSchedulers() {
   })
   .then(function(r){ return r.json(); })
   .then(function() {
-    Object.keys(schedulerTimers).forEach(function(id){ stopSchedulerLocal(id); });
-    toast('■ All schedulers stopped');
-    addNotification('info', 'All schedulers stopped');
-    renderSchedulerList();
-    renderLiveProcessesTable();
+    toast('■ Sequential scheduler stopped');
+    addNotification('info', 'Sequential scheduler stopped');
+    syncSchedulerStatusFromServer();
   })
   .catch(function(err){ toast('✕ Stop failed: ' + err.message); });
 }
@@ -4878,6 +4922,36 @@ function syncSchedulerStatusFromServer() {
   fetch(settings.serverUrl + '/scheduler/status', { signal: AbortSignal.timeout(4000) })
     .then(function(r){ return r.json(); })
     .then(function(d) {
+      schedulerMasterActive = !!d.masterSequential;
+      schedulerCurrentTable = d.currentTable || null;
+      schedulerNextRunTime  = d.nextRunTime || null;
+
+      // Update the master status badge
+      var badge = document.getElementById('scheduler-master-status-badge');
+      if (badge) {
+        if (schedulerMasterActive) {
+          if (schedulerCurrentTable) {
+            badge.textContent = 'Syncing: ' + schedulerCurrentTable;
+            badge.className   = 'badge badge-green';
+          } else {
+            badge.textContent = 'Idle (Waiting for Cycle)';
+            badge.className   = 'badge badge-purple';
+          }
+        } else {
+          badge.textContent = 'Inactive';
+          badge.className   = 'badge badge-grey';
+        }
+      }
+
+      // Sync running status to schedulerTimers so other views can display it
+      getOrderedTables().forEach(function(t) {
+        if (schedulerMasterActive && schedulerCurrentTable === t.id) {
+          schedulerTimers[t.id] = true;
+        } else {
+          delete schedulerTimers[t.id];
+        }
+      });
+
       renderSchedulerList();
       renderLiveProcessesTable();
     })

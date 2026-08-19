@@ -814,6 +814,9 @@ async function doSyncFirms(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
           }, `Firms:${firm.FirmNo}`);
           if (wr.ok) {
             console.log(`  ✅ Synced FirmNo ${firm.FirmNo} (trn_dte: ${firm.LastSyncTime})`);
+            if (ENABLE_DEV_RUN_WRITEBACK) {
+              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_firm_data', 'FirmNo', firm.FirmNo);
+            }
             success++;
             firmNoRows.push(firm);
 
@@ -1108,6 +1111,9 @@ async function doSyncProductionFirms(topLimit = 5, trigger = 'manual', bubbleBas
         }, `Firms:${rec.FirmNo}`);
 
         if (wr.ok) {
+          if (ENABLE_DEV_RUN_WRITEBACK) {
+            await writeBackDevRun(pool, 'dbo.Core_Organisations', 'Aff_FirmNo', rec.FirmNo);
+          }
           success++;
           if (!customIds || customIds.length === 0) {
             const nextWatermark = rec.LastSyncTime ? rec.LastSyncTime.toISOString() : originalWatermark;
@@ -1348,6 +1354,9 @@ async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
           }, `Banks:${key.AccountNumber}/${key.Firmno}`);
           if (wr.ok) {
             console.log(`  ✅ Synced bank ${key.AccountNumber} / FirmNo ${key.Firmno} (trn_dte: ${bank.trn_dte})`);
+            if (ENABLE_DEV_RUN_WRITEBACK) {
+              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_firm_bank', 'ID', bank.ID);
+            }
             success++;
             bankKeyRows.push(bank);
 
@@ -1635,6 +1644,9 @@ async function doSyncProductionBanks(topLimit = 5, trigger = 'manual', bubbleBas
         }, `Banks:${rec.AccountNumber}`);
 
         if (wr.ok) {
+          if (ENABLE_DEV_RUN_WRITEBACK) {
+            await writeBackDevRun(pool, 'dbo.Core_BankAccounts', 'Id', rec.Id);
+          }
           success++;
           if (!customIds || customIds.length === 0) {
             const nextWatermark = rec.trn_dte ? rec.trn_dte.toISOString() : originalWatermark;
@@ -1914,6 +1926,9 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
           }, `Practitioners:${p.MemNo}`);
           if (wr.ok) {
             console.log(`  ✅ Synced MemNo ${p.MemNo} (trn_dte: ${p.TransactionDate})`);
+            if (ENABLE_DEV_RUN_WRITEBACK) {
+              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_mem_data', 'MemNo', p.MemNo);
+            }
             success++;
             memNoRows.push(p);
 
@@ -2240,6 +2255,9 @@ async function doSyncProductionPractitioners(topLimit = 5, trigger = 'manual', b
         }, `Practitioners:${rec.MemNo}`);
 
         if (wr.ok) {
+          if (ENABLE_DEV_RUN_WRITEBACK) {
+            await writeBackDevRun(pool, 'dbo.Core_Persons', 'Id', rec.ID);
+          }
           success++;
           if (!customIds || customIds.length === 0) {
             const nextWatermark = rec.TransactionDate ? rec.TransactionDate.toISOString() : originalWatermark;
@@ -2465,6 +2483,9 @@ async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBa
           }, `PractitionersAdm:${rec.memno}`);
           if (wr.ok) {
             console.log(`  ✅ Synced admin memno ${rec.memno} (trn_dte: ${rec.trn_dte})`);
+            if (ENABLE_DEV_RUN_WRITEBACK) {
+              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_mem_adm', 'memno', rec.memno);
+            }
             success++;
             memnoRows.push(rec);
 
@@ -2727,6 +2748,9 @@ async function doSyncProductionPractitionersAdm(topLimit = 5, trigger = 'manual'
         }, `PractitionersAdm:${rec.memno}`);
 
         if (wr.ok) {
+          if (ENABLE_DEV_RUN_WRITEBACK) {
+            await writeBackDevRun(pool, 'dbo.Core_Persons', 'Aff_PractitionerNo', rec.memno);
+          }
           success++;
           if (!customIds || customIds.length === 0) {
             const nextWatermark = rec.trn_dte ? rec.trn_dte.toISOString() : originalWatermark;
@@ -2983,6 +3007,9 @@ async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleB
           }, `EmploymentHistory:${key.memno}/${key.firmno}`);
           if (wr.ok) {
             console.log(`  ✅ Synced employment memno ${key.memno} / firmno ${key.firmno} (trn_dte: ${rec.LastUpdated})`);
+            if (ENABLE_DEV_RUN_WRITEBACK) {
+              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_tblemploymenthistory', 'ID', rec.id);
+            }
             success++;
             empKeyRows.push(rec);
 
@@ -3228,6 +3255,9 @@ async function doSyncProductionEmploymentHistory(topLimit = 5, trigger = 'manual
         }, `EmploymentHistory:${rec.memno}/${rec.firmno}`);
 
         if (wr.ok) {
+          if (ENABLE_DEV_RUN_WRITEBACK) {
+            await writeBackDevRun(pool, 'dbo.Aff_PeriodFirmPractitioners', 'Id', rec.id);
+          }
           success++;
 
           // Save checkpoint watermark
@@ -3481,6 +3511,9 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
           }, `Audits:${key.FIRMNO}/${key.Year}`);
           if (wr.ok) {
             console.log(`  ✅ Synced audit FirmNo ${key.FIRMNO} / Year ${key.Year} (trn_dte: ${rec.LastUpdated})`);
+            if (ENABLE_DEV_RUN_WRITEBACK) {
+              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_audits', 'ID', rec.ID);
+            }
             success++;
             auditKeyRows.push(rec);
 
@@ -3725,6 +3758,9 @@ async function doSyncProductionAudits(topLimit = 5, trigger = 'manual', bubbleBa
         }, `Audits:${rec.ID}`);
 
         if (wr.ok) {
+          if (ENABLE_DEV_RUN_WRITEBACK) {
+            await writeBackDevRun(pool, 'dbo.Aff_FfcFirmQuestionnaires', 'Id', rec.ID);
+          }
           success++;
           if (!customIds || customIds.length === 0) {
             const nextWatermark = rec.LastUpdated ? rec.LastUpdated.toISOString() : originalWatermark;
@@ -5856,8 +5892,192 @@ app.post('/dashboard/reconciliation/run', (req, res) => {
 // ─── SCHEDULER ───────────────────────────────────────────────────────────────
 // ═════════════════════════════════════════════════════════════════════════════
 
+// ─── LEGACY dev_run WRITE-BACK INTEGRATION (PART 3) ──────────────────────────
+// HARD LOCK: Must default to false. Can only be enabled via environment variable ENABLE_DEV_RUN_WRITEBACK = 'true'
+const ENABLE_DEV_RUN_WRITEBACK = process.env.ENABLE_DEV_RUN_WRITEBACK === 'true';
+
+async function writeBackDevRun(pool, tableName, idField, idValue, targetDevRun = 2) {
+  if (!ENABLE_DEV_RUN_WRITEBACK) return;
+  try {
+    const request = pool.request();
+    request.input('id', sql.VarChar, String(idValue));
+    request.input('targetDevRun', sql.Int, targetDevRun);
+    const query = `UPDATE ${tableName} SET dev_run = @targetDevRun WHERE ${idField} = @id`;
+    await request.query(query);
+    console.log(`[Write-Back] Successfully set dev_run = ${targetDevRun} on table ${tableName} where ${idField} = ${idValue}`);
+  } catch (err) {
+    console.error(`[Write-Back Error] Failed to write back to ${tableName}: ${err.message}`);
+  }
+}
+
 const serverSchedulers = {};
-let masterSequentialTimer = null;
+
+// ─── STATE PERSISTENCE & SCHEDULER STATE MACHINE ─────────────────────────────
+const STATE_FILE_PATH = path.join(__dirname, 'scheduler_state.json');
+
+let schedulerState = {
+  isActive: false,
+  currentTable: null,
+  lastRunTime: null,
+  nextRunTime: null,
+  settings: {
+    order: ['firms', 'banks', 'practitioners', 'practitionersadm', 'employment-history', 'audits', 'applications', 'certificates'],
+    staggerSecs: 30,
+    intervalMinutes: 15,
+    topLimit: 5,
+    sources: {},
+    bubbleBase: DEFAULT_BUBBLE_BASE,
+    isProduction: false
+  }
+};
+
+let nextSequenceTimeout = null;
+let currentSequencePromise = null;
+let shouldAbortSequence = false;
+
+function loadSchedulerState() {
+  try {
+    if (fs.existsSync(STATE_FILE_PATH)) {
+      const data = JSON.parse(fs.readFileSync(STATE_FILE_PATH, 'utf8'));
+      schedulerState = { ...schedulerState, ...data };
+      console.log('📂 [Scheduler] Loaded state from disk:', JSON.stringify(schedulerState));
+    }
+  } catch (err) {
+    console.error('❌ [Scheduler] Failed to load state:', err.message);
+  }
+}
+
+function saveSchedulerState() {
+  try {
+    fs.writeFileSync(STATE_FILE_PATH, JSON.stringify(schedulerState, null, 2), 'utf8');
+  } catch (err) {
+    console.error('❌ [Scheduler] Failed to save state:', err.message);
+  }
+}
+
+function recoverSchedulerState() {
+  loadSchedulerState();
+  if (schedulerState.isActive) {
+    console.log('🔄 [Scheduler] Server restarted but scheduler was ACTIVE. Initiating recovery...');
+    if (schedulerState.currentTable) {
+      console.log(`⚠️ [Scheduler] Recovery: Table ${schedulerState.currentTable} was interrupted. Resetting state.`);
+      schedulerState.currentTable = null;
+    }
+    saveSchedulerState();
+    
+    console.log('▶️ [Scheduler] Resuming sequential sync cycle...');
+    startSequentialSequence(
+      schedulerState.settings.order,
+      schedulerState.settings.staggerSecs,
+      schedulerState.settings.intervalMinutes,
+      schedulerState.settings.topLimit,
+      schedulerState.settings.sources,
+      schedulerState.settings.bubbleBase,
+      schedulerState.settings.isProduction
+    );
+  }
+}
+
+async function startSequentialSequence(order, staggerSecs, intervalMinutes, topLimit, sources, bubbleBase, isProduction) {
+  if (currentSequencePromise) {
+    console.warn('⚠️ [Scheduler] A sequential sync cycle is already active. Ignoring start request.');
+    return;
+  }
+
+  schedulerState.isActive = true;
+  schedulerState.settings = {
+    order,
+    staggerSecs,
+    intervalMinutes,
+    topLimit,
+    sources,
+    bubbleBase,
+    isProduction
+  };
+  saveSchedulerState();
+
+  shouldAbortSequence = false;
+
+  const runCycle = async () => {
+    try {
+      console.log(`\n🔄 [Scheduler] Sequence cycle started at ${new Date().toISOString()}`);
+      schedulerState.lastRunTime = new Date().toISOString();
+      schedulerState.nextRunTime = null;
+      saveSchedulerState();
+
+      for (let i = 0; i < order.length; i++) {
+        if (shouldAbortSequence) {
+          console.log('🛑 [Scheduler] Sequence aborted.');
+          schedulerState.currentTable = null;
+          saveSchedulerState();
+          return;
+        }
+
+        const id = order[i];
+        if (!SYNC_ROUTE_MAP[id]) {
+          console.warn(`⚠️ [Scheduler] Unknown table id skipped: ${id}`);
+          continue;
+        }
+
+        const source = (sources && (sources[id] || sources[id.replace('-', '')])) ? (sources[id] || sources[id.replace('-', '')]) : 'staging';
+        
+        console.log(`📅 [Scheduler] [${new Date().toISOString()}] Table ${i + 1}/${order.length}: Starting sync for ${id} (TOP ${topLimit}) [Source: ${source}]`);
+        schedulerState.currentTable = id;
+        saveSchedulerState();
+
+        try {
+          await SYNC_ROUTE_MAP[id](topLimit, 'scheduled', bubbleBase, isProduction, null, null, source);
+          console.log(`📅 [Scheduler] [${new Date().toISOString()}] Table ${i + 1}/${order.length}: Successfully finished sync for ${id}`);
+        } catch (tableErr) {
+          console.error(`❌ [Scheduler] [${new Date().toISOString()}] Table ${i + 1}/${order.length}: Failed sync for ${id} — Error: ${tableErr.message}`);
+          console.log(`📅 [Scheduler] Skipping failed table ${id} and proceeding to the next table.`);
+        }
+
+        if (i < order.length - 1 && staggerSecs > 0) {
+          console.log(`⏳ [Scheduler] Waiting ${staggerSecs}s stagger delay before next table...`);
+          for (let s = 0; s < staggerSecs; s++) {
+            if (shouldAbortSequence) break;
+            await sleep(1000);
+          }
+        }
+      }
+
+      console.log(`\n✅ [Scheduler] Sequence cycle completed at ${new Date().toISOString()}`);
+      schedulerState.currentTable = null;
+      
+      const nextRunMs = intervalMinutes * 60 * 1000;
+      schedulerState.nextRunTime = new Date(Date.now() + nextRunMs).toISOString();
+      saveSchedulerState();
+
+      if (schedulerState.isActive && !shouldAbortSequence) {
+        console.log(`⏳ [Scheduler] Next sequence cycle scheduled in ${intervalMinutes} minutes (at ${schedulerState.nextRunTime})`);
+        nextSequenceTimeout = setTimeout(runCycle, nextRunMs);
+      }
+    } catch (err) {
+      console.error('❌ [Scheduler] Critical error in sequence loop:', err.message);
+      schedulerState.currentTable = null;
+      saveSchedulerState();
+    }
+  };
+
+  currentSequencePromise = runCycle().finally(() => {
+    currentSequencePromise = null;
+  });
+}
+
+function stopSequentialSequence() {
+  schedulerState.isActive = false;
+  schedulerState.currentTable = null;
+  schedulerState.nextRunTime = null;
+  saveSchedulerState();
+
+  shouldAbortSequence = true;
+  if (nextSequenceTimeout) {
+    clearTimeout(nextSequenceTimeout);
+    nextSequenceTimeout = null;
+  }
+  console.log('🛑 [Scheduler] Sequential scheduler stopped successfully.');
+}
 
 // ── Global Sync Tracking & Stop Flags ────────────────────────────────────────
 const activeSyncs = {}; // { 'firms-abc123': { entity: 'firms', startedAt: '...', shouldStop: false } }
@@ -5949,59 +6169,12 @@ function isBootLocked() {
 
 // ─── /scheduler/start ────────────────────────────────────────────────────────
 app.post('/scheduler/start', (req, res) => {
-  console.log(`[scheduler/start] x-environment header: "${req.headers['x-environment']}"`);
-  if (isBootLocked())
-    return res.json({ success: false, message: 'Boot lock active — please wait 30s after server start' });
-
-  const { tableId, intervalMinutes, topLimit, source = 'staging' } = req.body;
-  const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
-
-  if (!tableId || !SYNC_ROUTE_MAP[tableId])
-    return res.status(400).json({ success: false, error: 'Unknown tableId' });
-  if (serverSchedulers[tableId])
-    return res.json({ success: true, message: 'Already running', tableId });
-
-  const mins = parseInt(intervalMinutes) || 15;
-  const ms = mins * 60 * 1000;
-  const top = parseInt(topLimit) || 5;
-  const isProduction = req.headers['x-environment'] === 'production';
-  const nextRun = new Date(Date.now() + ms).toISOString();
-
-  const devRun = req.body?.devRun !== undefined ? parseInt(req.body.devRun) : (isProduction ? 0 : 1);
-
-  serverSchedulers[tableId] = {
-    intervalMinutes: mins,
-    topLimit: top,
-    bubbleBase: bubbleBase,
-    isProduction: isProduction,
-    devRun: devRun,
-    source: source,
-    startedAt: new Date().toISOString(),
-    nextRun,
-    timer: setInterval(async () => {
-      try {
-        await SYNC_ROUTE_MAP[tableId](top, 'scheduled', serverSchedulers[tableId].bubbleBase, serverSchedulers[tableId].isProduction, serverSchedulers[tableId].devRun, null, serverSchedulers[tableId].source);
-      } catch (err) {
-        console.error(`❌ [Scheduler:${tableId}] Sync failed — server kept alive:`, err.message);
-      }
-      serverSchedulers[tableId].nextRun = new Date(Date.now() + ms).toISOString();
-    }, ms),
-  };
-
-  console.log(`🟢 Scheduler started: ${tableId} every ${mins} min (TOP ${top}) [Source: ${source}] → ${bubbleBase}`);
-  res.json({ success: true, tableId, intervalMinutes: mins, topLimit: top, nextRun, source });
+  res.json({ success: false, message: 'Individual table scheduling is disabled. Please use the master Sequential Scheduler.' });
 });
 
 // ─── /scheduler/stop ─────────────────────────────────────────────────────────
 app.post('/scheduler/stop', (req, res) => {
-  const { tableId } = req.body;
-  if (!serverSchedulers[tableId])
-    return res.json({ success: true, message: 'Not running', tableId });
-
-  clearInterval(serverSchedulers[tableId].timer);
-  delete serverSchedulers[tableId];
-  console.log(`🔴 Scheduler stopped: ${tableId}`);
-  res.json({ success: true, tableId, stopped: true });
+  res.json({ success: false, message: 'Individual table scheduling is disabled. Please use the master Sequential Scheduler.' });
 });
 
 // ─── /scheduler/start-all ────────────────────────────────────────────────────
@@ -6009,105 +6182,27 @@ app.post('/scheduler/start-all', (req, res) => {
   if (isBootLocked())
     return res.json({ success: false, message: 'Boot lock active — please wait 30s after server start' });
 
-  const { mode, order, staggerSecs, intervalMinutes, topLimit, sources } = req.body;
+  const { order, staggerSecs, intervalMinutes, topLimit, sources } = req.body;
   const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
+  const isProduction = req.headers['x-environment'] === 'production';
 
-  if (masterSequentialTimer) { clearInterval(masterSequentialTimer); masterSequentialTimer = null; }
-  Object.keys(serverSchedulers).forEach(id => { clearInterval(serverSchedulers[id].timer); delete serverSchedulers[id]; });
+  stopSequentialSequence();
 
   const mins = parseInt(intervalMinutes) || 15;
-  const ms = mins * 60 * 1000;
-  const stagger = parseInt(staggerSecs) || 0;
+  const stagger = parseInt(staggerSecs) || 30;
   const top = parseInt(topLimit) || 5;
   const orderedIds = Array.isArray(order) ? order : Object.keys(SYNC_ROUTE_MAP);
 
-  console.log(`🟢 Start-All — mode: ${mode}, interval: ${mins}min, stagger: ${stagger}s, TOP: ${top}, base: ${bubbleBase}`);
+  console.log(`🟢 [Scheduler API] Starting Sequential Scheduler — Interval: ${mins}min, Stagger: ${stagger}s, TOP: ${top}, Env: ${isProduction ? 'production' : 'development'}`);
 
-  if (mode === 'sequential') {
-    const isProduction = req.headers['x-environment'] === 'production';
-    const runSequential = async () => {
-      console.log('🔄 Sequential master run starting...');
-      for (const id of orderedIds) {
-        if (!SYNC_ROUTE_MAP[id]) continue;
-        const source = (sources && (sources[id] || sources[id.replace('-', '')])) ? (sources[id] || sources[id.replace('-', '')]) : 'staging';
-        console.log(`▶️  Sequential: firing ${id} (TOP ${top}) [Source: ${source}]...`);
-        await SYNC_ROUTE_MAP[id](top, 'scheduled', bubbleBase, isProduction, null, null, source);
-        if (stagger > 0) {
-          console.log(`⏳ Stagger: waiting ${stagger}s before next table...`);
-          await sleep(stagger * 1000);
-        }
-      }
-      console.log('✅ Sequential master run complete.');
-    };
-    runSequential();
-    masterSequentialTimer = setInterval(runSequential, ms);
-    res.json({ success: true, mode: 'sequential', intervalMinutes: mins, staggerSecs: stagger, topLimit: top, order: orderedIds });
+  startSequentialSequence(orderedIds, stagger, mins, top, sources, bubbleBase, isProduction);
 
-  } else if (mode === 'hybrid') {
-    const isProduction = req.headers['x-environment'] === 'production';
-    orderedIds.forEach((id, i) => {
-      if (!SYNC_ROUTE_MAP[id]) return;
-      const source = (sources && (sources[id] || sources[id.replace('-', '')])) ? (sources[id] || sources[id.replace('-', '')]) : 'staging';
-      setTimeout(() => {
-        const nextRun = new Date(Date.now() + ms).toISOString();
-        serverSchedulers[id] = {
-          intervalMinutes: mins,
-          topLimit: top,
-          bubbleBase: bubbleBase,
-          isProduction: isProduction,
-          source: source,
-          startedAt: new Date().toISOString(),
-          nextRun,
-          timer: setInterval(async () => {
-            try {
-              await SYNC_ROUTE_MAP[id](top, 'scheduled', serverSchedulers[id].bubbleBase, serverSchedulers[id].isProduction, null, null, serverSchedulers[id].source);
-            } catch (err) {
-              console.error(`❌ [Scheduler:${id}] Sync failed — server kept alive:`, err.message);
-            }
-            serverSchedulers[id].nextRun = new Date(Date.now() + ms).toISOString();
-          }, ms),
-        };
-      }, i * stagger * 1000);
-    });
-    res.json({ success: true, mode: 'hybrid', intervalMinutes: mins, staggerSecs: stagger, topLimit: top, order: orderedIds });
-
-  } else {
-    // independent
-    const isProduction = req.headers['x-environment'] === 'production';
-    orderedIds.forEach(id => {
-      if (!SYNC_ROUTE_MAP[id] || serverSchedulers[id]) return;
-      const source = (sources && (sources[id] || sources[id.replace('-', '')])) ? (sources[id] || sources[id.replace('-', '')]) : 'staging';
-      const nextRun = new Date(Date.now() + ms).toISOString();
-      serverSchedulers[id] = {
-        intervalMinutes: mins,
-        topLimit: top,
-        bubbleBase: bubbleBase,
-        isProduction: isProduction,
-        source: source,
-        startedAt: new Date().toISOString(),
-        nextRun,
-        timer: setInterval(async () => {
-          await SYNC_ROUTE_MAP[id](top, 'scheduled', serverSchedulers[id].bubbleBase, serverSchedulers[id].isProduction, null, null, serverSchedulers[id].source);
-          serverSchedulers[id].nextRun = new Date(Date.now() + ms).toISOString();
-        }, ms),
-      };
-    });
-    res.json({ success: true, mode: 'independent', intervalMinutes: mins, topLimit: top, order: orderedIds });
-  }
+  res.json({ success: true, mode: 'sequential', intervalMinutes: mins, staggerSecs: stagger, topLimit: top, order: orderedIds });
 });
 
 // ─── /scheduler/stop-all-v2 ──────────────────────────────────────────────────
 app.post('/scheduler/stop-all-v2', (req, res) => {
-  if (masterSequentialTimer) {
-    clearInterval(masterSequentialTimer);
-    masterSequentialTimer = null;
-    console.log('🔴 Master sequential timer stopped');
-  }
-  Object.keys(serverSchedulers).forEach(id => {
-    clearInterval(serverSchedulers[id].timer);
-    delete serverSchedulers[id];
-  });
-  console.log('🔴 All schedulers stopped');
+  stopSequentialSequence();
   res.json({ success: true, stopped: true });
 });
 
@@ -6161,24 +6256,14 @@ app.post('/scheduler/run-now', (req, res) => {
 
 // ─── /scheduler/status ───────────────────────────────────────────────────────
 app.get('/scheduler/status', (req, res) => {
-  const status = {};
-  Object.keys(serverSchedulers).forEach(id => {
-    const s = serverSchedulers[id];
-    status[id] = {
-      running: true,
-      intervalMinutes: s.intervalMinutes,
-      topLimit: s.topLimit,
-      bubbleBase: s.bubbleBase,
-      startedAt: s.startedAt,
-      nextRun: s.nextRun,
-    };
-  });
   res.json({
     success: true,
     bootLockActive: Date.now() - SERVER_BOOT_TIME < 30000,
-    masterSequential: masterSequentialTimer !== null,
-    running: Object.keys(serverSchedulers),
-    schedulers: status,
+    masterSequential: schedulerState.isActive,
+    currentTable: schedulerState.currentTable,
+    lastRunTime: schedulerState.lastRunTime,
+    nextRunTime: schedulerState.nextRunTime,
+    settings: schedulerState.settings,
     activeSyncs: Object.keys(activeSyncs).map(id => ({
       syncId: id,
       entity: activeSyncs[id].entity,
@@ -6562,6 +6647,9 @@ async function doSyncApplications(topLimit = 5, trigger = 'manual', bubbleBase =
         }, `Applications:${record.Id}`);
 
         if (wr.ok) {
+          if (ENABLE_DEV_RUN_WRITEBACK) {
+            await writeBackDevRun(pool, 'dbo.Lic_LicenseApplications', 'Id', record.Id);
+          }
           success++;
           latestTimestamp = record.Frwk_LastUpdatedTimestamp ? record.Frwk_LastUpdatedTimestamp.toISOString() : latestTimestamp;
           sendProgress(table, {
@@ -6859,6 +6947,9 @@ async function doSyncCertificates(topLimit = 5, trigger = 'manual', bubbleBase =
         }, `Certificates:${record.Id}`);
 
         if (wr.ok) {
+          if (ENABLE_DEV_RUN_WRITEBACK) {
+            await writeBackDevRun(pool, 'dbo.Cert_Certificates', 'Id', record.Id);
+          }
           success++;
           latestTimestamp = record.Frwk_LastUpdatedTimestamp.toISOString();
           sendProgress(table, {
@@ -7116,8 +7207,7 @@ function migrateLegacyFiles() {
 migrateLegacyFiles();
 
 app.listen(3000, '0.0.0.0', () => {
-  if (masterSequentialTimer) { clearInterval(masterSequentialTimer); masterSequentialTimer = null; }
-  Object.keys(serverSchedulers).forEach(id => { clearInterval(serverSchedulers[id].timer); delete serverSchedulers[id]; });
   console.log('Server running on http://0.0.0.0:3000');
   console.log('Accessible at http://102.130.122.57:3000');
+  recoverSchedulerState();
 });
