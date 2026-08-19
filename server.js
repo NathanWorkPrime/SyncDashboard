@@ -5920,6 +5920,9 @@ let schedulerState = {
   currentTable: null,
   lastRunTime: null,
   nextRunTime: null,
+  consecutiveFailures: {},
+  lastFailureTime: {},
+  lastFailureMessage: {},
   settings: {
     order: ['firms', 'banks', 'practitioners', 'practitionersadm', 'employment-history', 'audits', 'applications', 'certificates'],
     staggerSecs: 30,
@@ -5927,7 +5930,9 @@ let schedulerState = {
     topLimit: 5,
     sources: {},
     bubbleBase: DEFAULT_BUBBLE_BASE,
-    isProduction: false
+    isProduction: false,
+    pausedTables: {},
+    autoPauseCount: 3
   }
 };
 
@@ -5940,6 +5945,12 @@ function loadSchedulerState() {
     if (fs.existsSync(STATE_FILE_PATH)) {
       const data = JSON.parse(fs.readFileSync(STATE_FILE_PATH, 'utf8'));
       schedulerState = { ...schedulerState, ...data };
+      schedulerState.consecutiveFailures = schedulerState.consecutiveFailures || {};
+      schedulerState.lastFailureTime = schedulerState.lastFailureTime || {};
+      schedulerState.lastFailureMessage = schedulerState.lastFailureMessage || {};
+      schedulerState.settings = schedulerState.settings || {};
+      schedulerState.settings.pausedTables = schedulerState.settings.pausedTables || {};
+      schedulerState.settings.autoPauseCount = schedulerState.settings.autoPauseCount || 3;
       console.log('📂 [Scheduler] Loaded state from disk:', JSON.stringify(schedulerState));
     }
   } catch (err) {
@@ -5973,12 +5984,13 @@ function recoverSchedulerState() {
       schedulerState.settings.topLimit,
       schedulerState.settings.sources,
       schedulerState.settings.bubbleBase,
-      schedulerState.settings.isProduction
+      schedulerState.settings.isProduction,
+      schedulerState.settings.autoPauseCount
     );
   }
 }
 
-async function startSequentialSequence(order, staggerSecs, intervalMinutes, topLimit, sources, bubbleBase, isProduction) {
+async function startSequentialSequence(order, staggerSecs, intervalMinutes, topLimit, sources, bubbleBase, isProduction, autoPauseCount = 3, pausedTables = null) {
   if (currentSequencePromise) {
     console.warn('⚠️ [Scheduler] A sequential sync cycle is already active. Ignoring start request.');
     return;
@@ -5992,7 +6004,9 @@ async function startSequentialSequence(order, staggerSecs, intervalMinutes, topL
     topLimit,
     sources,
     bubbleBase,
-    isProduction
+    isProduction,
+    pausedTables: pausedTables || schedulerState.settings.pausedTables || {},
+    autoPauseCount
   };
   saveSchedulerState();
 
@@ -6019,6 +6033,11 @@ async function startSequentialSequence(order, staggerSecs, intervalMinutes, topL
           continue;
         }
 
+        if (schedulerState.settings.pausedTables && schedulerState.settings.pausedTables[id]) {
+          console.log(`📅 [Scheduler] Skipping paused table ${id}`);
+          continue;
+        }
+
         const source = (sources && (sources[id] || sources[id.replace('-', '')])) ? (sources[id] || sources[id.replace('-', '')]) : 'staging';
         
         console.log(`📅 [Scheduler] [${new Date().toISOString()}] Table ${i + 1}/${order.length}: Starting sync for ${id} (TOP ${topLimit}) [Source: ${source}]`);
@@ -6028,9 +6047,26 @@ async function startSequentialSequence(order, staggerSecs, intervalMinutes, topL
         try {
           await SYNC_ROUTE_MAP[id](topLimit, 'scheduled', bubbleBase, isProduction, null, null, source);
           console.log(`📅 [Scheduler] [${new Date().toISOString()}] Table ${i + 1}/${order.length}: Successfully finished sync for ${id}`);
+          schedulerState.consecutiveFailures[id] = 0;
+          saveSchedulerState();
         } catch (tableErr) {
           console.error(`❌ [Scheduler] [${new Date().toISOString()}] Table ${i + 1}/${order.length}: Failed sync for ${id} — Error: ${tableErr.message}`);
           console.log(`📅 [Scheduler] Skipping failed table ${id} and proceeding to the next table.`);
+          
+          schedulerState.consecutiveFailures[id] = (schedulerState.consecutiveFailures[id] || 0) + 1;
+          schedulerState.lastFailureTime[id] = new Date().toISOString();
+          schedulerState.lastFailureMessage[id] = tableErr.message;
+          
+          const threshold = schedulerState.settings.autoPauseCount || 3;
+          if (schedulerState.consecutiveFailures[id] >= threshold) {
+            console.warn(`⚠️ [Scheduler] Table ${id} reached consecutive failure threshold (${threshold}). Auto-pausing table.`);
+            if (!schedulerState.settings.pausedTables) schedulerState.settings.pausedTables = {};
+            schedulerState.settings.pausedTables[id] = true;
+          }
+          saveSchedulerState();
+          
+          // Log to global dashboard error system
+          await logSyncError(id, 'SCHEDULER', `Sequential Scheduler failed on table ${id}: ${tableErr.message}`, bubbleBase, 'Network', 500, tableErr.stack);
         }
 
         if (i < order.length - 1 && staggerSecs > 0) {
@@ -6182,7 +6218,7 @@ app.post('/scheduler/start-all', (req, res) => {
   if (isBootLocked())
     return res.json({ success: false, message: 'Boot lock active — please wait 30s after server start' });
 
-  const { order, staggerSecs, intervalMinutes, topLimit, sources } = req.body;
+  const { order, staggerSecs, intervalMinutes, topLimit, sources, autoPauseCount, pausedTables } = req.body;
   const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
   const isProduction = req.headers['x-environment'] === 'production';
 
@@ -6192,12 +6228,27 @@ app.post('/scheduler/start-all', (req, res) => {
   const stagger = parseInt(staggerSecs) || 30;
   const top = parseInt(topLimit) || 5;
   const orderedIds = Array.isArray(order) ? order : Object.keys(SYNC_ROUTE_MAP);
+  const autoPauseLimit = parseInt(autoPauseCount) || 3;
 
-  console.log(`🟢 [Scheduler API] Starting Sequential Scheduler — Interval: ${mins}min, Stagger: ${stagger}s, TOP: ${top}, Env: ${isProduction ? 'production' : 'development'}`);
+  console.log(`🟢 [Scheduler API] Starting Sequential Scheduler — Interval: ${mins}min, Stagger: ${stagger}s, TOP: ${top}, Env: ${isProduction ? 'production' : 'development'}, Auto-Pause Threshold: ${autoPauseLimit}`);
 
-  startSequentialSequence(orderedIds, stagger, mins, top, sources, bubbleBase, isProduction);
+  startSequentialSequence(orderedIds, stagger, mins, top, sources, bubbleBase, isProduction, autoPauseLimit, pausedTables);
 
-  res.json({ success: true, mode: 'sequential', intervalMinutes: mins, staggerSecs: stagger, topLimit: top, order: orderedIds });
+  res.json({ success: true, mode: 'sequential', intervalMinutes: mins, staggerSecs: stagger, topLimit: top, order: orderedIds, autoPauseCount: autoPauseLimit, pausedTables });
+});
+
+// ─── /scheduler/pause ────────────────────────────────────────────────────────
+app.post('/scheduler/pause', (req, res) => {
+  const { tableId, paused } = req.body;
+  if (!tableId) {
+    return res.status(400).json({ success: false, error: 'Missing tableId parameter' });
+  }
+  if (!schedulerState.settings.pausedTables) {
+    schedulerState.settings.pausedTables = {};
+  }
+  schedulerState.settings.pausedTables[tableId] = !!paused;
+  saveSchedulerState();
+  res.json({ success: true, pausedTables: schedulerState.settings.pausedTables });
 });
 
 // ─── /scheduler/stop-all-v2 ──────────────────────────────────────────────────
@@ -6263,6 +6314,9 @@ app.get('/scheduler/status', (req, res) => {
     currentTable: schedulerState.currentTable,
     lastRunTime: schedulerState.lastRunTime,
     nextRunTime: schedulerState.nextRunTime,
+    consecutiveFailures: schedulerState.consecutiveFailures || {},
+    lastFailureTime: schedulerState.lastFailureTime || {},
+    lastFailureMessage: schedulerState.lastFailureMessage || {},
     settings: schedulerState.settings,
     activeSyncs: Object.keys(activeSyncs).map(id => ({
       syncId: id,

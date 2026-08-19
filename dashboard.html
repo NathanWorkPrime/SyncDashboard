@@ -2040,6 +2040,9 @@ var schedulerTimers      = {};
 var schedulerMasterActive = false;
 var schedulerCurrentTable = null;
 var schedulerNextRunTime  = null;
+var schedulerLastFailureTime = {};
+var schedulerLastFailureMessage = {};
+var schedulerConsecutiveFailures = {};
 var schedulerCounters    = {};
 var schedulerCountdowns  = {};
 var consecutiveFails     = {};
@@ -2781,6 +2784,7 @@ function renderLiveProcessesTable() {
 function togglePauseFromTable(id, enabled) {
   tablePaused[id] = !enabled;
   localStorage.setItem('tablePaused', JSON.stringify(tablePaused));
+  syncPauseStateToServer(id, tablePaused[id]);
   renderLiveProcessesTable(); renderSyncControlList(); renderSchedulerList();
   var ac = getOrderedTables().filter(function(t){ return !tablePaused[t.id]; }).length;
   document.getElementById('stat-instances').textContent = ac;
@@ -2817,6 +2821,16 @@ function renderSyncControlList() {
       + '<option value="production" ' + (sourceVal === 'production' ? 'selected' : '') + '>Production</option>'
       + '</select></div>';
 
+    var failureMetaHtml = '';
+    if (schedulerLastFailureTime && schedulerLastFailureTime[t.id]) {
+      var failTime = new Date(schedulerLastFailureTime[t.id]);
+      var timeStr = failTime.toLocaleTimeString();
+      var errorMsg = schedulerLastFailureMessage[t.id] || 'Unknown error';
+      if (errorMsg.length > 50) errorMsg = errorMsg.slice(0, 47) + '...';
+      var failsCount = schedulerConsecutiveFailures[t.id] || 0;
+      failureMetaHtml = '<div class="sync-proc-meta" style="color:var(--red);font-weight:600;">⚠️ Last run failed at ' + timeStr + ': ' + errorMsg + ' (' + failsCount + ' failures)</div>';
+    }
+
     return '<div class="sync-proc-card' + (paused ? ' paused' : '') + '" draggable="true" data-id="' + t.id + '" ondragstart="dragStart(event)" ondragover="dragOver(event)" ondrop="dropTable(event)">'
       + '<div class="sync-proc-header">'
       +   '<span class="sync-proc-drag" title="Drag to reorder — affects Sequential/Hybrid scheduling">⠿</span>'
@@ -2843,6 +2857,7 @@ function renderSyncControlList() {
       +   '</div>'
       + '</div>'
       + '<div class="sync-proc-body">'
+      +   failureMetaHtml
       +   '<div class="sync-proc-meta">⏱ Last run: <strong>' + lastRunStr + '</strong></div>'
       +   '<div class="sync-proc-meta">🔖 Watermark: <span class="watermark-chip">' + wmStr + '</span></div>'
       +   '<div class="sync-proc-meta">📦 TOP: <div class="sync-proc-top"><input type="number" value="' + topVal + '" min="1" max="10000" style="width:65px;" onchange="setTableTop(\'' + t.id + '\',this.value)" /><span style="font-size:11px;color:var(--text-muted);">records</span></div></div>'
@@ -2907,10 +2922,21 @@ function onDevRunToggle(tableId, isOn) {
 function togglePause(id) {
   tablePaused[id] = !tablePaused[id];
   localStorage.setItem('tablePaused', JSON.stringify(tablePaused));
+  syncPauseStateToServer(id, tablePaused[id]);
   renderSyncControlList(); renderLiveProcessesTable(); renderSchedulerList();
   var ac = getOrderedTables().filter(function(t){ return !tablePaused[t.id]; }).length;
   document.getElementById('stat-instances').textContent = ac;
   document.getElementById('stat-instances-sub').textContent = ac + ' of ' + TABLES.length + ' tables active';
+}
+
+function syncPauseStateToServer(id, isPaused) {
+  fetch(settings.serverUrl + '/scheduler/pause', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tableId: id, paused: isPaused })
+  })
+  .then(function(r){ return r.json(); })
+  .catch(function(err){ console.error('Failed to sync pause state:', err.message); });
 }
 function saveGlobalTop() {
   settings.topLimit = parseInt(document.getElementById('global-top').value) || 5;
@@ -4718,13 +4744,25 @@ function renderSchedulerList() {
       countdownVal = '—';
     }
 
+    var failureInfoHtml = '';
+    if (schedulerLastFailureTime && schedulerLastFailureTime[t.id]) {
+      var failTime = new Date(schedulerLastFailureTime[t.id]);
+      var timeStr = failTime.toLocaleTimeString();
+      var errorMsg = schedulerLastFailureMessage[t.id] || 'Unknown error';
+      if (errorMsg.length > 60) errorMsg = errorMsg.slice(0, 57) + '...';
+      failureInfoHtml = '<div style="font-size:10px;color:var(--red);margin-top:2px;font-weight:normal;">❌ Last run failed at ' + timeStr + ': ' + errorMsg + '</div>';
+    }
+
     return '<div class="scheduler-row" draggable="' + showDrag + '" data-id="' + t.id + '"'
       + ' ondragstart="schedDragStart(event)" ondragover="schedDragOver(event)" ondrop="schedDrop(event)">'
       + dragHandle
-      + '<div class="scheduler-name" style="display:flex;align-items:center;gap:4px;">'
-      +   orderBadge
-      +   t.label
-      +   (isPaused ? ' <span class="badge badge-amber" style="font-size:10px;margin-left:4px;">Paused</span>' : '')
+      + '<div class="scheduler-name" style="display:flex;flex-direction:column;justify-content:center;gap:2px;">'
+      +   '<div style="display:flex;align-items:center;gap:4px;">'
+      +     orderBadge
+      +     t.label
+      +     (isPaused ? ' <span class="badge badge-amber" style="font-size:10px;margin-left:4px;">Paused</span>' : '')
+      +   '</div>'
+      +   failureInfoHtml
       + '</div>'
       + sourceSelectHtml
       + '<div class="countdown" id="countdown-' + t.id + '" style="margin-left:auto;font-family:monospace;font-size:12px;font-weight:700;">' + countdownVal + '</div>'
@@ -4845,11 +4883,12 @@ function stopScheduler(tableId) {
 
 function startAllSchedulers(userInitiated) {
   if (!userInitiated) return;
-  var tables   = getOrderedTables().filter(function(t){ return !tablePaused[t.id]; });
+  var tables   = getOrderedTables();
   var order    = tables.map(function(t){ return t.id; });
   var interval = parseInt(document.getElementById('global-interval').value) || parseInt(document.getElementById('setting-interval').value) || settings.interval;
   var stagger  = parseInt(document.getElementById('stagger-secs').value) || settings.staggerSecs || 30;
   var topLimit = settings.topLimit || 5;
+  var autoPauseLimit = parseInt(document.getElementById('auto-pause-count').value) || settings.autoPauseCount || 3;
   var sources = {};
   tables.forEach(function(t) {
     sources[t.id] = tableSourceOverrides[t.id] || settings.syncSource || 'staging';
@@ -4861,7 +4900,7 @@ function startAllSchedulers(userInitiated) {
       'x-bubble-base-url': settings.bubbleBaseUrl || environments[activeEnv].bubbleBaseUrl || 'https://fidfunddev.site/api/1.1/',
       'x-environment':     activeEnv === 'prod' ? 'production' : 'development'
     },
-    body: JSON.stringify({ mode: 'sequential', order: order, staggerSecs: stagger, intervalMinutes: interval, topLimit: topLimit, sources: sources })
+    body: JSON.stringify({ mode: 'sequential', order: order, staggerSecs: stagger, intervalMinutes: interval, topLimit: topLimit, sources: sources, autoPauseCount: autoPauseLimit, pausedTables: tablePaused })
   })
   .then(function(r){ return r.json(); })
   .then(function(d) {
@@ -4925,6 +4964,24 @@ function syncSchedulerStatusFromServer() {
       schedulerMasterActive = !!d.masterSequential;
       schedulerCurrentTable = d.currentTable || null;
       schedulerNextRunTime  = d.nextRunTime || null;
+      schedulerLastFailureTime = d.lastFailureTime || {};
+      schedulerLastFailureMessage = d.lastFailureMessage || {};
+      schedulerConsecutiveFailures = d.consecutiveFailures || {};
+
+      // Sync local tablePaused state from server
+      if (d.settings && d.settings.pausedTables) {
+        var anyChanged = false;
+        Object.keys(d.settings.pausedTables).forEach(function(tableId) {
+          var serverPaused = !!d.settings.pausedTables[tableId];
+          if (!!tablePaused[tableId] !== serverPaused) {
+            tablePaused[tableId] = serverPaused;
+            anyChanged = true;
+          }
+        });
+        if (anyChanged) {
+          localStorage.setItem('tablePaused', JSON.stringify(tablePaused));
+        }
+      }
 
       // Update the master status badge
       var badge = document.getElementById('scheduler-master-status-badge');
@@ -4953,6 +5010,7 @@ function syncSchedulerStatusFromServer() {
       });
 
       renderSchedulerList();
+      renderSyncControlList();
       renderLiveProcessesTable();
     })
     .catch(function(){});
