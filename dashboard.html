@@ -844,7 +844,6 @@
               <th class="hide-sm">Schedule</th>
               <th class="hide-sm">Last Run</th>
               <th class="hide-sm">Watermark</th>
-              <th class="hide-sm" title="dev_run mode — re-sync already-processed records">DevRun</th>
               <th>SQL Source</th>
               <th>Status</th>
               <th>Actions</th>
@@ -2761,6 +2760,51 @@ function loadWatermarks() {
 }
 
 
+function buildRowHtml(t, isScheduleTab) {
+  var paused      = !!tablePaused[t.id];
+  var isScheduled = !!schedulerTimers[t.id];
+  var last        = tableLastRun[t.id];
+  var ts          = last ? formatTimeSplit(last.RunTimestamp) : null;
+  var lastRunStr  = ts ? ts.date + ' ' + ts.time : 'Never';
+  var lastStatus  = last ? (last.Status||'').toLowerCase() : '';
+  var statusDot   = lastStatus === 'success' ? 'dot-green' : lastStatus === 'partial' ? 'dot-amber' : lastStatus === 'error' ? 'dot-red' : 'dot-grey';
+  var schedLabel  = isScheduled ? 'Every ' + (tableIntervalOverrides[t.id] || settings.interval) + ' min' : '—';
+  var watermark   = tableWatermarks[t.id] ? formatTimeSplit(tableWatermarks[t.id]) : null;
+  var wmStr       = watermark ? watermark.date + ' ' + watermark.time : '—';
+  var devRunOn    = tableDevRun[t.id] === 1;
+  var devChecked  = devRunOn ? 'checked' : '';
+  var devBadge    = devRunOn ? '<span class="badge badge-amber" style="font-size:9px;margin-left:4px;">⚡ Re-sync</span>' : '';
+  var sourceVal   = tableSourceOverrides[t.id] || settings.syncSource || 'staging';
+  var sourceSelectHtml = '<select onchange="onTableSourceChange(\'' + t.id + '\',this.value)" style="padding:4px 8px;font-size:11px;border-radius:6px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);">'
+    + '<option value="staging" ' + (sourceVal === 'staging' ? 'selected' : '') + '>Staging</option>'
+    + '<option value="production" ' + (sourceVal === 'production' ? 'selected' : '') + '>Prod</option>'
+    + '</select>';
+
+  var cols = '<tr>'
+    + '<td><input type="checkbox" class="proc-checkbox" data-id="' + t.id + '" style="width:14px;height:14px;padding:0;" /></td>'
+    + '<td><div class="proc-list-name"><span class="dot ' + statusDot + '"></span>' + t.label + devBadge + '</div><div class="proc-list-sub">' + t.route + '</div></td>'
+    + '<td class="hide-sm"><span class="badge badge-purple">Data Sync</span></td>'
+    + '<td class="hide-sm">' + (isScheduled ? '<span class="badge badge-green">' + schedLabel + '</span>' : '<span class="badge badge-grey">Manual</span>') + '</td>'
+    + '<td class="hide-sm" style="font-size:12px;color:var(--text-sub);">' + lastRunStr + '</td>'
+    + '<td class="hide-sm"><div style="display:flex;align-items:center;gap:6px;"><span class="watermark-chip" style="cursor:default;" title="' + (watermark ? new Date(tableWatermarks[t.id]).toISOString() : 'Not set') + '">⏱ ' + wmStr + '</span><button class="btn btn-secondary" style="font-size:10px;padding:3px 8px;border-radius:5px;" onclick="openResetModalFromTable(\'' + t.id + '\',\'' + t.label + '\')">Reset</button></div></td>';
+
+  if (!isScheduleTab) {
+    cols += '<td class="hide-sm"><label class="toggle toggle-amber" style="margin:0;"><input type="checkbox" ' + devChecked + ' onchange="onDevRunToggle(\'' + t.id + '\',this.checked)" /><span class="toggle-slider"></span></label></td>';
+  }
+
+  cols += '<td>' + sourceSelectHtml + '</td>'
+    + '<td><div class="toggle-wrap"><label class="toggle"><input type="checkbox" ' + (!paused ? 'checked' : '') + ' onchange="togglePauseFromTable(\'' + t.id + '\',this.checked)" /><span class="toggle-slider"></span></label><span style="font-size:12px;color:' + (!paused ? 'var(--green)' : 'var(--amber)') + ';font-weight:600;">' + (!paused ? 'Active' : 'Paused') + '</span></div></td>';
+
+  if (!isScheduleTab) {
+    cols += '<td><div class="flex gap-8"><button class="btn btn-secondary btn-sm" onclick="runDry(\'' + t.id + '\')">🧪</button><button class="btn btn-primary btn-sm" onclick="runSync(\'' + t.id + '\')" ' + (paused ? 'disabled' : '') + '>▶ Run</button></div></td>';
+  } else {
+    cols += '<td><div class="flex gap-8"><button class="btn btn-secondary btn-sm" onclick="runDry(\'' + t.id + '\')">🧪</button></div></td>';
+  }
+
+  cols += '</tr>';
+  return cols;
+}
+
 // ── LIVE PROCESSES TABLE ──
 function renderLiveProcessesTable() {
   var tbody = document.getElementById('live-processes-tbody');
@@ -2774,42 +2818,16 @@ function renderLiveProcessesTable() {
   var summaryElSched = document.getElementById('control-summary-label-schedule');
   if (summaryElSched) summaryElSched.textContent = activeCount + ' active · ' + pausedCount + ' paused · ' + tables.length + ' total';
 
-  var html = tables.map(function(t) {
-    var paused      = !!tablePaused[t.id];
-    var isScheduled = !!schedulerTimers[t.id];
-    var last        = tableLastRun[t.id];
-    var ts          = last ? formatTimeSplit(last.RunTimestamp) : null;
-    var lastRunStr  = ts ? ts.date + ' ' + ts.time : 'Never';
-    var lastStatus  = last ? (last.Status||'').toLowerCase() : '';
-    var statusDot   = lastStatus === 'success' ? 'dot-green' : lastStatus === 'partial' ? 'dot-amber' : lastStatus === 'error' ? 'dot-red' : 'dot-grey';
-    var schedLabel  = isScheduled ? 'Every ' + (tableIntervalOverrides[t.id] || settings.interval) + ' min' : '—';
-    var watermark   = tableWatermarks[t.id] ? formatTimeSplit(tableWatermarks[t.id]) : null;
-    var wmStr       = watermark ? watermark.date + ' ' + watermark.time : '—';
-    var devRunOn    = tableDevRun[t.id] === 1;
-    var devChecked  = devRunOn ? 'checked' : '';
-    var devBadge    = devRunOn ? '<span class="badge badge-amber" style="font-size:9px;margin-left:4px;">⚡ Re-sync</span>' : '';
-    var sourceVal   = tableSourceOverrides[t.id] || settings.syncSource || 'staging';
-    var sourceSelectHtml = '<select onchange="onTableSourceChange(\'' + t.id + '\',this.value)" style="padding:4px 8px;font-size:11px;border-radius:6px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);">'
-      + '<option value="staging" ' + (sourceVal === 'staging' ? 'selected' : '') + '>Staging</option>'
-      + '<option value="production" ' + (sourceVal === 'production' ? 'selected' : '') + '>Prod</option>'
-      + '</select>';
-
-    return '<tr>'
-      + '<td><input type="checkbox" class="proc-checkbox" data-id="' + t.id + '" style="width:14px;height:14px;padding:0;" /></td>'
-      + '<td><div class="proc-list-name"><span class="dot ' + statusDot + '"></span>' + t.label + devBadge + '</div><div class="proc-list-sub">' + t.route + '</div></td>'
-      + '<td class="hide-sm"><span class="badge badge-purple">Data Sync</span></td>'
-      + '<td class="hide-sm">' + (isScheduled ? '<span class="badge badge-green">' + schedLabel + '</span>' : '<span class="badge badge-grey">Manual</span>') + '</td>'
-      + '<td class="hide-sm" style="font-size:12px;color:var(--text-sub);">' + lastRunStr + '</td>'
-      + '<td class="hide-sm"><div style="display:flex;align-items:center;gap:6px;"><span class="watermark-chip" style="cursor:default;" title="' + (watermark ? new Date(tableWatermarks[t.id]).toISOString() : 'Not set') + '">⏱ ' + wmStr + '</span><button class="btn btn-secondary" style="font-size:10px;padding:3px 8px;border-radius:5px;" onclick="openResetModalFromTable(\'' + t.id + '\',\'' + t.label + '\')">Reset</button></div></td>'
-      + '<td class="hide-sm"><label class="toggle toggle-amber" style="margin:0;"><input type="checkbox" ' + devChecked + ' onchange="onDevRunToggle(\'' + t.id + '\',this.checked)" /><span class="toggle-slider"></span></label></td>'
-      + '<td>' + sourceSelectHtml + '</td>'
-      + '<td><div class="toggle-wrap"><label class="toggle"><input type="checkbox" ' + (!paused ? 'checked' : '') + ' onchange="togglePauseFromTable(\'' + t.id + '\',this.checked)" /><span class="toggle-slider"></span></label><span style="font-size:12px;color:' + (!paused ? 'var(--green)' : 'var(--amber)') + ';font-weight:600;">' + (!paused ? 'Active' : 'Paused') + '</span></div></td>'
-      + '<td><div class="flex gap-8"><button class="btn btn-secondary btn-sm" onclick="runDry(\'' + t.id + '\')">🧪</button><button class="btn btn-primary btn-sm" onclick="runSync(\'' + t.id + '\')" ' + (paused ? 'disabled' : '') + '>▶ Run</button></div></td>'
-      + '</tr>';
-  }).join('');
-
-  if (tbody) tbody.innerHTML = html;
-  if (tbodySched) tbodySched.innerHTML = html;
+  if (tbody) {
+    tbody.innerHTML = tables.map(function(t) {
+      return buildRowHtml(t, false);
+    }).join('');
+  }
+  if (tbodySched) {
+    tbodySched.innerHTML = tables.map(function(t) {
+      return buildRowHtml(t, true);
+    }).join('');
+  }
 }
 
 function togglePauseFromTable(id, enabled) {
