@@ -66,12 +66,11 @@
     .topbar-logo-text span { color: var(--purple); }
 
     /* flat nav */
-    .flat-nav { display: flex; align-items: center; gap: 2px; }
+    .flat-nav { display: flex; align-items: center; gap: 8px; }
     .flat-nav-item { position: relative; display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text-sub); transition: all 0.15s; user-select: none; white-space: nowrap; border: none; background: none; }
     .flat-nav-item:hover { background: var(--purple-light); color: var(--purple); }
     .flat-nav-item.active { background: var(--purple-light); color: var(--purple); font-weight: 700; }
     .flat-nav-item .nav-icon { font-size: 13px; }
-    .flat-nav-divider { width: 1px; height: 18px; background: var(--border-2); margin: 0 4px; }
     /* error badge on nav */
     .nav-badge { position: absolute; top: 3px; right: 5px; min-width: 16px; height: 16px; background: var(--red); color: #fff; border-radius: 20px; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center; padding: 0 4px; line-height: 1; }
 
@@ -498,13 +497,11 @@
     <button class="flat-nav-item active" data-page="overview"  onclick="showPage('overview')"><span class="nav-label">Overview</span></button>
     <button class="flat-nav-item"        data-page="live-dashboard" onclick="showPage('live-dashboard')"><span class="nav-label">Live Dashboard</span></button>
     <button class="flat-nav-item"        data-page="processes" onclick="showPage('processes')"><span class="nav-label">Processes</span></button>
-    <button class="flat-nav-item"        data-page="history"   onclick="showPage('history')"><span class="nav-label">Sync History</span></button>
-    <div class="flat-nav-divider"></div>
-    <button class="flat-nav-item"        data-page="preview"   onclick="showPage('preview')"><span class="nav-label">Data Preview</span></button>
     <button class="flat-nav-item"        data-page="manual-processes" onclick="showPage('manual-processes')"><span class="nav-label">Manual Processes</span></button>
-    <button class="flat-nav-item"        data-page="errors"    onclick="showPage('errors')"><span class="nav-label">Errors</span><span class="nav-badge" id="nav-error-badge" style="display:none;">0</span></button>
+    <button class="flat-nav-item"        data-page="history"   onclick="showPage('history')"><span class="nav-label">Sync History</span></button>
+    <button class="flat-nav-item"        data-page="preview"   onclick="showPage('preview')"><span class="nav-label">Data Preview</span></button>
     <button class="flat-nav-item"        data-page="versions"  onclick="showPage('versions')"><span class="nav-label">Version History</span></button>
-    <div class="flat-nav-divider"></div>
+    <button class="flat-nav-item"        data-page="errors"    onclick="showPage('errors')"><span class="nav-label">Errors</span><span class="nav-badge" id="nav-error-badge" style="display:none;">0</span></button>
     <button class="flat-nav-item"        data-page="settings"  onclick="showPage('settings')"><span class="nav-label">Settings</span></button>
   </div>
 
