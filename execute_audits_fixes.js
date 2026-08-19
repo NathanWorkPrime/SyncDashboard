@@ -48,116 +48,117 @@ async function main() {
   console.log('Connecting to SQL database...');
   const pool = await sql.connect(sqlConfig);
 
-  const batchSize = 200;
+  const batchSize = 1000;
   let successCount = 0;
   let failCount = 0;
   const startTime = Date.now();
 
+  const CONCURRENCY = 40;
+
   for (let i = 0; i < mismatchedIds.length; i += batchSize) {
-    // Check for stop file
     if (fs.existsSync('stop_sync.txt')) {
       console.log('Stop file stop_sync.txt detected. Gracefully stopping sync.');
       break;
     }
 
     const chunk = mismatchedIds.slice(i, i + batchSize);
-    console.log(`\n--- Processing batch ${Math.floor(i / batchSize) + 1} (${i + 1} to ${Math.min(i + batchSize, mismatchedIds.length)} of ${mismatchedIds.length}) ---`);
+    console.log(`\n--- Fetching batch ${Math.floor(i / batchSize) + 1} (${i + 1} to ${Math.min(i + batchSize, mismatchedIds.length)} of ${mismatchedIds.length}) ---`);
 
     const idList = chunk.map(id => `'${id}'`).join(',');
     const query = `
       SELECT 
-        Id,
-        FirmNo,
-        IsQualified,
-        Year,
-        AuditTypeLkp,
-        IsAprroved,
-        AuditorId,
-        Frwk_InactiveFlag,
-        Frwk_LastUpdatedTimestamp,
-        Frwk_CreatedTimestamp,
-        DueDate,
-        ReceivedDate,
-        ApprovedDate,
-        PeriodStartDate,
-        PeriodEnddate,
-        AuditReportId,
-        AuditFeesAmount,
-        GrossInterestAmount,
-        NetInterestAmount,
-        BankChargesAmount,
-        AuditComplianceStatusLkp
+        Id, FirmNo, IsQualified, Year, AuditTypeLkp, IsAprroved, AuditorId,
+        Frwk_InactiveFlag, Frwk_LastUpdatedTimestamp, Frwk_CreatedTimestamp,
+        DueDate, ReceivedDate, ApprovedDate, PeriodStartDate, PeriodEnddate,
+        AuditReportId, AuditFeesAmount, GrossInterestAmount, NetInterestAmount,
+        BankChargesAmount, AuditComplianceStatusLkp
       FROM dbo.Aff_FirmFinancialYears
       WHERE Id IN (${idList})
     `;
 
     const res = await pool.request().query(query);
     const sqlRecords = res.recordset;
-    
     console.log(`Fetched ${sqlRecords.length} records from SQL.`);
 
-    // Loop through the fetched SQL records and sync sequentially
-    for (const rec of sqlRecords) {
+    // Parallel execution in batches of CONCURRENCY
+    for (let j = 0; j < sqlRecords.length; j += CONCURRENCY) {
       if (fs.existsSync('stop_sync.txt')) {
-        console.log('Stop file stop_sync.txt detected inside batch. Stopping.');
+        console.log('Stop file stop_sync.txt detected. Stopping.');
         break;
       }
 
-      const payload = {
-        id: rec.Id !== null ? String(rec.Id) : null,
-        firm_no: rec.FirmNo !== null ? String(rec.FirmNo) : null,
-        due_date: rec.DueDate ? rec.DueDate.toISOString() : null,
-        received_date: rec.ReceivedDate ? rec.ReceivedDate.toISOString() : null,
-        qualified: rec.IsQualified ? "yes" : "no",
-        year: rec.Year !== null ? String(rec.Year) : null,
-        audit_type: "YEAREND",
-        approved: rec.IsAprroved ? "yes" : "no",
-        approved_date: rec.ApprovedDate ? rec.ApprovedDate.toISOString() : null,
-        approved_by: null,
-        financial_year_start: rec.PeriodStartDate ? rec.PeriodStartDate.toISOString() : null,
-        financial_year_end: rec.PeriodEnddate ? rec.PeriodEnddate.toISOString() : null,
-        audit_report_number: rec.AuditReportId || null,
-        audit_fees_amount: rec.AuditFeesAmount !== null ? Number(rec.AuditFeesAmount) : null,
-        actual_audit_fees: null,
-        gross_interest_amount: rec.GrossInterestAmount !== null ? Number(rec.GrossInterestAmount) : null,
-        net_interest_amount: rec.NetInterestAmount !== null ? Number(rec.NetInterestAmount) : null,
-        bank_charge_amount: rec.BankChargesAmount !== null ? Number(rec.BankChargesAmount) : null,
-        auditor: rec.AuditorId !== null ? String(rec.AuditorId) : null,
-        discriminator: "Aff.FirmFY",
-        inactive_flag: rec.Frwk_InactiveFlag === true || rec.Frwk_InactiveFlag === 1 ? "true" : "false",
-        last_updated: (rec.Frwk_LastUpdatedTimestamp || rec.Frwk_CreatedTimestamp || new Date()).toISOString(),
-        audit_compliance_status: rec.AuditComplianceStatusLkp !== null ? String(rec.AuditComplianceStatusLkp) : null,
-        external_id: rec.Id !== null ? String(rec.Id) : null
-      };
+      const batch = sqlRecords.slice(j, j + CONCURRENCY);
+      const promises = batch.map(async (rec) => {
+        const payload = {
+          id: rec.Id !== null ? String(rec.Id) : null,
+          firm_no: rec.FirmNo !== null ? String(rec.FirmNo) : null,
+          due_date: rec.DueDate ? rec.DueDate.toISOString() : null,
+          received_date: rec.ReceivedDate ? rec.ReceivedDate.toISOString() : null,
+          qualified: rec.IsQualified ? "yes" : "no",
+          year: rec.Year !== null ? String(rec.Year) : null,
+          audit_type: "YEAREND",
+          approved: rec.IsAprroved ? "yes" : "no",
+          approved_date: rec.ApprovedDate ? rec.ApprovedDate.toISOString() : null,
+          approved_by: null,
+          financial_year_start: rec.PeriodStartDate ? rec.PeriodStartDate.toISOString() : null,
+          financial_year_end: rec.PeriodEnddate ? rec.PeriodEnddate.toISOString() : null,
+          audit_report_number: rec.AuditReportId || null,
+          audit_fees_amount: rec.AuditFeesAmount !== null ? Number(rec.AuditFeesAmount) : null,
+          actual_audit_fees: null,
+          gross_interest_amount: rec.GrossInterestAmount !== null ? Number(rec.GrossInterestAmount) : null,
+          net_interest_amount: rec.NetInterestAmount !== null ? Number(rec.NetInterestAmount) : null,
+          bank_charge_amount: rec.BankChargesAmount !== null ? Number(rec.BankChargesAmount) : null,
+          auditor: rec.AuditorId !== null ? String(rec.AuditorId) : null,
+          discriminator: "Aff.FirmFY",
+          inactive_flag: rec.Frwk_InactiveFlag === true || rec.Frwk_InactiveFlag === 1 ? "true" : "false",
+          last_updated: (rec.Frwk_LastUpdatedTimestamp || rec.Frwk_CreatedTimestamp || new Date()).toISOString(),
+          audit_compliance_status: rec.AuditComplianceStatusLkp !== null ? String(rec.AuditComplianceStatusLkp) : null,
+          external_id: rec.Id !== null ? String(rec.Id) : null
+        };
 
-      try {
-        const response = await fetch(`${BUBBLE_BASE}wf/get_audits`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${BUBBLE_TOKEN}`
-          },
-          body: JSON.stringify(payload)
-        });
+        let attempt = 1;
+        let sent = false;
 
-        if (response.ok) {
-          successCount++;
-        } else {
-          const text = await response.text();
-          console.error(`Failed to sync ID ${rec.Id}: HTTP ${response.status} - ${text}`);
-          failCount++;
+        while (attempt <= 3 && !sent) {
+          try {
+            const response = await fetch(`${BUBBLE_BASE}wf/get_audits`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${BUBBLE_TOKEN}`
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+              successCount++;
+              sent = true;
+            } else {
+              if (response.status === 429) {
+                await delay(500 * attempt);
+              } else {
+                await delay(200);
+              }
+              attempt++;
+            }
+          } catch (err) {
+            await delay(200);
+            attempt++;
+          }
         }
-      } catch (err) {
-        console.error(`Network error syncing ID ${rec.Id}: ${err.message}`);
-        failCount++;
-      }
 
-      // Safe pacing: 150ms delay between records
-      await delay(150);
+        if (!sent) {
+          failCount++;
+          console.error(`❌ Failed to sync ID ${rec.Id}`);
+        }
+      });
+
+      await Promise.all(promises);
+      await delay(250); // Concurrency delay
     }
 
-    const elapsedMin = ((Date.now() - startTime) / 60000).toFixed(1);
-    console.log(`Progress: ${successCount} successful, ${failCount} failed. Elapsed: ${elapsedMin} min.`);
+    const elapsedSec = Math.round((Date.now() - startTime) / 1000);
+    console.log(`Progress: ${successCount} successful, ${failCount} failed. Elapsed: ${elapsedSec}s.`);
   }
 
   await pool.close();
@@ -167,6 +168,6 @@ async function main() {
   console.log(`Fail Count: ${failCount}`);
 }
 
-main().catch(async err => {
+main().catch(err => {
   console.error('Fatal execution error:', err);
 });
