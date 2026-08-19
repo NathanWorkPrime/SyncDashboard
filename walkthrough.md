@@ -36,6 +36,20 @@ We have successfully completed all requested changes, including:
 * **Selector Removal**: Removed the "Independent" and "Hybrid" option cards and explanation boxes from the Schedule tab.
 * **Enforced Sequential Mode**: Made "Sequential" the fixed, only scheduling mode, ensuring all tables run in the configured drag order with a stagger delay.
 
+### 6. UI Banner Removals & Cleanup
+* **Imports sub-tab**: Removed the purple "Imports Integration" header banner card and the four stat cards underneath. The "License Applications" and "Certificates" sections now move smoothly to the top of the container.
+* **Processes sub-tab**: Removed the color-coded legend grid under the "Global TOP Limit" input card.
+* **Bulk Delete sub-tab**: Removed the red "Bulk Delete Utility" header banner card.
+* **Manual Push sub-tab**: Removed the purple "Manual & Bulk Push Utility" header banner card.
+
+### 7. Nav Default Sub-Tab Routing Fix
+* **Processes Page**: Clicking "Processes" in the top-level navigation now automatically defaults to opening the "Processes" sub-tab.
+* **Manual Processes Page**: Clicking "Manual Processes" in the top-level navigation now automatically defaults to opening the "Bulk Delete" sub-tab.
+
+### 8. Dynamic Version History & Git Logs
+* **Backend Endpoint**: Implemented a new `/dashboard/versions` endpoint in `server.js` that dynamically retrieves the recent 30 commits from the Git repository logs.
+* **Frontend Rendering**: Rewrote the frontend `loadVersions` handler to fetch from this endpoint and render a clean, searchable, and responsive log table. Pushes a direct link next to each commit allowing the user to view the commit details on GitHub.
+
 ---
 
 ## 📊 Final Verified Counts & Layouts
@@ -47,6 +61,10 @@ We have successfully completed all requested changes, including:
 ---
 
 ## 🖼️ Verification Media & Logs
+
+### 🎥 Restructured UI & Version History Verification Recording
+Demonstrates the removed banners on all 4 sub-tabs, the automatic default sub-tab loading on nav click, and the fully populated Git commit deployment table inside the Version History page:
+![Verify Restructure and Versions Recording](file:///C:/Users/Nathan/.gemini/antigravity-ide/brain/5faac778-161e-4e59-bcf1-3921274a31f4/verify_restructure_and_versions_1787131421827.webp)
 
 ### 🎥 Navigation & Sub-Tabs Verification Recording
 Shows the navigation bar, Processes page sub-tabs (Processes, Schedule, Imports), and Manual Processes page sub-tabs (Bulk Delete, Manual Push) working correctly without console errors:

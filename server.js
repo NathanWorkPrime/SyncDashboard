@@ -4517,6 +4517,29 @@ app.get('/dashboard/sql-info', async (req, res) => {
   }
 });
 
+app.get('/dashboard/versions', async (req, res) => {
+  try {
+    const cp = require('child_process');
+    const output = cp.execSync('git log -n 30 --pretty=format:"%h|%ad|%an|%s" --date=short', { encoding: 'utf8' });
+    const lines = output.split('\n').filter(l => l.trim() !== '');
+    const versions = lines.map(line => {
+      const parts = line.split('|');
+      return {
+        version: parts[0] || '—',
+        dateTime: parts[1] || '—',
+        author: parts[2] || '—',
+        environment: 'agent-dev',
+        status: 'deployed',
+        summary: parts[3] || '—',
+        tags: 'Git Commit'
+      };
+    });
+    res.json({ success: true, versions });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─── Reconciliation Summary & Background Trigger ─────────────────────────────
 let isReconciliationRunning = false;
 let reconciliationProgress = '';

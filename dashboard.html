@@ -765,29 +765,6 @@
     <span class="text-muted">records per sync run (per table)</span>
     <button class="btn btn-secondary btn-sm" onclick="saveGlobalTop()">Save</button>
   </div>
-  <div style="display:flex;gap:16px;margin-top:12px;flex-wrap:wrap;">
-    <div style="display:flex;align-items:center;gap:7px;padding:6px 12px;background:var(--green-light);border-radius:var(--radius-sm);">
-      <span style="font-size:13px;">🟢</span>
-      <div>
-        <div style="font-size:12px;font-weight:700;color:var(--green);">1 – 50</div>
-        <div style="font-size:11px;color:var(--text-muted);">Normal scheduled sync</div>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;gap:7px;padding:6px 12px;background:var(--amber-light);border-radius:var(--radius-sm);">
-      <span style="font-size:13px;">🟡</span>
-      <div>
-        <div style="font-size:12px;font-weight:700;color:var(--amber);">200 – 500</div>
-        <div style="font-size:11px;color:var(--text-muted);">Fast catch-up / backfill</div>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;gap:7px;padding:6px 12px;background:var(--red-light);border-radius:var(--radius-sm);">
-      <span style="font-size:13px;">🔴</span>
-      <div>
-        <div style="font-size:12px;font-weight:700;color:var(--red);">1000+</div>
-        <div style="font-size:11px;color:var(--text-muted);">Risk of Bubble API timeout</div>
-      </div>
-    </div>
-  </div>
 </div>
     </div><!-- end tab-control -->
 
@@ -839,44 +816,7 @@
 
     <!-- ── TAB: IMPORTS ── -->
     <div class="tab-pane" id="tab-imports">
-      <div class="page-hero-wrap" style="margin-top: 10px; margin-bottom: 16px;">
-        <div class="page-hero">
-          <div class="page-hero-inner">
-            <div>
-              <div class="page-hero-title">Imports Integration</div>
-              <div class="page-hero-sub">Synchronise Applications and Certificates from SQL to Bubble</div>
-            </div>
-            <div class="page-hero-actions">
-              <button class="btn btn-hero-primary btn-sm" onclick="runImportsSyncAll()">▶ Run All Imports</button>
-              <button class="btn btn-hero-secondary btn-sm" onclick="resetImportsCircuitBreaker()">Reset CB</button>
-            </div>
-          </div>
-        </div>
-      </div>
-      
       <div class="page-body" style="padding: 0;">
-        <div class="grid-4">
-          <div class="stat-card" style="border-left:4px solid var(--purple);">
-            <div class="stat-label">Circuit Breaker</div>
-            <div class="stat-value" id="imports-cb-state">CLOSED</div>
-            <div class="stat-sub" id="imports-cb-failures">Failures: 0</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Total Tables</div>
-            <div class="stat-value">2</div>
-            <div class="stat-sub">Applications & Certificates</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Active Sync</div>
-            <div class="stat-value" id="imports-active-val" style="font-size: 20px;">Idle</div>
-            <div class="stat-sub" id="imports-active-sub">No active import</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Default Limit</div>
-            <div class="stat-value" id="imports-default-limit-val">5</div>
-            <div class="stat-sub">Per batch sync</div>
-          </div>
-        </div>
 
         <!-- Active Import Sync Progress panel (visible when running) -->
         <div class="card" id="imports-live-sync-panel" style="display:none; border-left:4px solid var(--purple); margin-bottom:18px;">
@@ -1211,17 +1151,6 @@
 
     <!-- ── TAB: BULK DELETE ── -->
     <div class="tab-pane active" id="tab-delete">
-      <div class="page-hero-wrap" style="margin-top: 10px; margin-bottom: 16px;">
-        <div class="page-hero" style="background: linear-gradient(135deg, #ef4444 0%, #991b1b 55%, #1e1b4b 100%);">
-          <div class="page-hero-inner">
-            <div>
-              <div class="page-hero-title">Bulk Delete Utility</div>
-              <div class="page-hero-sub">Permanently delete records from Bubble database types using a CSV list of unique IDs</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
       <div class="page-body" style="padding: 0;">
         <div class="grid-2">
           <!-- Upload Card -->
@@ -1321,17 +1250,6 @@
 
     <!-- ── TAB: MANUAL PUSH ── -->
     <div class="tab-pane" id="tab-manual-push">
-      <div class="page-hero-wrap" style="margin-top: 10px; margin-bottom: 16px;">
-        <div class="page-hero" style="background: linear-gradient(135deg, var(--purple) 0%, #4f46e5 55%, #1e1b4b 100%);">
-          <div class="page-hero-inner">
-            <div>
-              <div class="page-hero-title">Manual & Bulk Push Utility</div>
-              <div class="page-hero-sub">Synchronise specific records from SQL Server to Bubble LIVE by ID list or CSV upload</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
       <div class="page-body" style="padding: 0;">
         <div class="grid-2">
           <!-- Configuration & Input Card -->
@@ -2244,13 +2162,10 @@ function activatePage(id) {
   if (id === 'versions')  loadVersions();
   if (id === 'preview')   { populateTableSelects(); updateConnStringDisplay(); }
   if (id === 'processes') {
+    switchTab('tab-control');
     renderSyncControlList();
     renderLiveProcessesTable();
     renderSchedulerList();
-    var activeTab = document.querySelector('#page-processes .tab-item.active');
-    if (activeTab && activeTab.getAttribute('data-tab') === 'tab-imports') {
-      loadImportsWatermarks();
-    }
   }
   if (id === 'settings')  { renderResetSyncList(); loadConnectionInfo(); loadSqlTableInfo(); loadWatermarks(); }
 }
@@ -5679,6 +5594,7 @@ const originalActivatePage = activatePage;
 activatePage = function(id) {
   originalActivatePage(id);
   if (id === 'manual-processes') {
+    switchTab('tab-delete');
     updateDeleteEnvBadge();
     loadExposedTablesForDelete();
     updatePushEnvBadge();
@@ -6833,8 +6749,35 @@ function pollReconciliationStatus() {
 // ── VERSION HISTORY JS HANDLERS ──
 async function loadVersions() {
   const tbody = document.getElementById('versions-tbody');
-  if (tbody) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;" class="text-muted">No versions deployed yet.</td></tr>';
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;"><span class="spinner"></span> Loading version history...</td></tr>';
+  try {
+    const res = await fetch(settings.serverUrl + '/dashboard/versions');
+    const data = await res.json();
+    if (!data.success || !data.versions || data.versions.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;" class="text-muted">No versions deployed yet.</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = data.versions.map(v => {
+      const badgeClass = v.status === 'deployed' ? 'badge-green' : 'badge-grey';
+      return `
+        <tr>
+          <td style="font-family:monospace; font-weight:700; color:var(--purple);">${v.version}</td>
+          <td><span style="font-size:12px; font-family:monospace;">${v.dateTime}</span></td>
+          <td><strong>${v.author}</strong></td>
+          <td><span class="badge badge-grey">${v.environment}</span></td>
+          <td><span class="badge ${badgeClass}">${v.status}</span></td>
+          <td><div style="max-width:350px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${v.summary.replace(/"/g, '&quot;')}">${v.summary}</div></td>
+          <td><span class="badge badge-purple">${v.tags}</span></td>
+          <td>
+            <a href="https://github.com/NathanWorkPrime/SyncDashboard/commit/${v.version}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none; display:inline-block;">GitHub</a>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--red);">Error loading versions: ${err.message}</td></tr>`;
   }
 }
 </script>
