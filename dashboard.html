@@ -829,6 +829,31 @@
         </div>
       </div>
 
+      <!-- Live Processes Table -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="flex-between" style="margin-bottom:14px;">
+          <div class="card-title" style="margin:0;">Live Processes</div>
+          <span class="text-muted" style="font-size:12px;" id="control-summary-label-schedule"></span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="proc-list-table">
+            <thead><tr>
+              <th style="width:24px;"><input type="checkbox" id="select-all-proc-schedule" onchange="toggleSelectAllSchedule(this)" style="width:14px;height:14px;padding:0;" /></th>
+              <th>Process Name</th>
+              <th class="hide-sm">Type</th>
+              <th class="hide-sm">Schedule</th>
+              <th class="hide-sm">Last Run</th>
+              <th class="hide-sm">Watermark</th>
+              <th class="hide-sm" title="dev_run mode — re-sync already-processed records">DevRun</th>
+              <th>SQL Source</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr></thead>
+            <tbody id="live-processes-tbody-schedule"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Per-Table Sequence -->
       <div class="card" style="margin-bottom:16px;">
         <div class="card-title">Per-Table Sequence (Drag to Reorder)</div>
@@ -2215,7 +2240,10 @@ function switchTab(tabId) {
   document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('active'); });
   document.querySelector('.tab-item[data-tab="' + tabId + '"]').classList.add('active');
   document.getElementById(tabId).classList.add('active');
-  if (tabId === 'tab-scheduler') renderSchedulerList();
+  if (tabId === 'tab-scheduler') {
+    renderSchedulerList();
+    renderLiveProcessesTable();
+  }
   if (tabId === 'tab-imports') loadImportsWatermarks();
 }
 
@@ -2736,14 +2764,17 @@ function loadWatermarks() {
 // ── LIVE PROCESSES TABLE ──
 function renderLiveProcessesTable() {
   var tbody = document.getElementById('live-processes-tbody');
-  if (!tbody) return;
+  var tbodySched = document.getElementById('live-processes-tbody-schedule');
+  if (!tbody && !tbodySched) return;
   var tables      = getOrderedTables();
   var activeCount = tables.filter(function(t){ return !tablePaused[t.id]; }).length;
   var pausedCount = tables.filter(function(t){ return  tablePaused[t.id]; }).length;
   var summaryEl   = document.getElementById('control-summary-label');
   if (summaryEl) summaryEl.textContent = activeCount + ' active · ' + pausedCount + ' paused · ' + tables.length + ' total';
+  var summaryElSched = document.getElementById('control-summary-label-schedule');
+  if (summaryElSched) summaryElSched.textContent = activeCount + ' active · ' + pausedCount + ' paused · ' + tables.length + ' total';
 
-  tbody.innerHTML = tables.map(function(t) {
+  var html = tables.map(function(t) {
     var paused      = !!tablePaused[t.id];
     var isScheduled = !!schedulerTimers[t.id];
     var last        = tableLastRun[t.id];
@@ -2776,6 +2807,9 @@ function renderLiveProcessesTable() {
       + '<td><div class="flex gap-8"><button class="btn btn-secondary btn-sm" onclick="runDry(\'' + t.id + '\')">🧪</button><button class="btn btn-primary btn-sm" onclick="runSync(\'' + t.id + '\')" ' + (paused ? 'disabled' : '') + '>▶ Run</button></div></td>'
       + '</tr>';
   }).join('');
+
+  if (tbody) tbody.innerHTML = html;
+  if (tbodySched) tbodySched.innerHTML = html;
 }
 
 function togglePauseFromTable(id, enabled) {
@@ -2787,7 +2821,8 @@ function togglePauseFromTable(id, enabled) {
   document.getElementById('stat-instances').textContent = ac;
   document.getElementById('stat-instances-sub').textContent = ac + ' of ' + TABLES.length + ' tables active';
 }
-function toggleSelectAll(cb) { document.querySelectorAll('.proc-checkbox').forEach(function(c){ c.checked = cb.checked; }); }
+function toggleSelectAll(cb) { document.querySelectorAll('#live-processes-tbody .proc-checkbox').forEach(function(c){ c.checked = cb.checked; }); }
+function toggleSelectAllSchedule(cb) { document.querySelectorAll('#live-processes-tbody-schedule .proc-checkbox').forEach(function(c){ c.checked = cb.checked; }); }
 
 // ── SYNC CONTROL CARDS ──
 function renderSyncControlList() {
@@ -2909,6 +2944,9 @@ function onDevRunToggle(tableId, isOn) {
   if (badge) {
     badge.style.display = isOn ? '' : 'none';
   }
+
+  renderLiveProcessesTable();
+  renderSyncControlList();
 
   toast(isOn
     ? '⚠ ' + tableId + ' switched to Re-sync mode (dev_run = 1)'
