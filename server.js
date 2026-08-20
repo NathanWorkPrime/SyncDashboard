@@ -703,7 +703,7 @@ async function doSyncFirms(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
     let globalMinWatermark = originalWatermark; // Track GLOBAL minimum across flushes
 
     // Register this sync
-    const syncId = generateSyncId('firms');
+    syncId = generateSyncId('firms');
     registerSync(syncId, 'firms');
 
     // Reset stop flag for this entity
@@ -937,13 +937,17 @@ async function doSyncFirms(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
     return { success: errors === 0, synced: success, errors, entities: distinctFirmNos.length, totalRows, failedIds };
 
   } catch (err) {
-    // Unregister sync on error
-    if (typeof syncId !== 'undefined') {
+    if (syncId) {
+      sendProgress('firms', {
+        current: 0,
+        total: topLimit,
+        percent: 0,
+        message: `❌ Sync failed: ${err.message}`,
+        status: 'failed'
+      });
       unregisterSync(syncId);
     }
     throw err;
-  } finally {
-    if (pool) await pool.close();
   }
 }
 
@@ -1069,6 +1073,10 @@ async function doSyncProductionFirms(topLimit = 5, trigger = 'manual', bubbleBas
 
     let recordIndex = 0;
     for (const rec of records) {
+      if (shouldStopSync('employmenthistory', syncId)) {
+        console.log(`\n🛑 [STOP SIGNAL] EmploymentHistory sync stopped by user`);
+        return { success: false, synced: success, errors, stopped: true };
+      }
       if (shouldStopSync('firms', syncId)) {
         console.log(`\n🛑 [STOP SIGNAL] Firms sync stopped by user`);
         return { success: false, synced: success, errors, stopped: true };
@@ -1170,9 +1178,19 @@ async function doSyncProductionFirms(topLimit = 5, trigger = 'manual', bubbleBas
 
     runSingleTableReconciliation('firms', isProduction, bubbleBase).catch(err => console.error('Firms background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
+  } catch (err) {
+    if (syncId) {
+      sendProgress('firms', {
+        current: 0,
+        total: topLimit,
+        percent: 0,
+        message: `❌ Production Sync failed: ${err.message}`,
+        status: 'failed'
+      });
+    }
+    throw err;
   } finally {
     if (syncId) unregisterSync(syncId);
-    if (pool) await pool.close();
   }
 }
 
@@ -1275,7 +1293,7 @@ async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
     let globalMinWatermark = originalWatermark; // Track GLOBAL minimum across flushes
 
     // Register this sync
-    const syncId = generateSyncId('banks');
+    syncId = generateSyncId('banks');
     registerSync(syncId, 'banks');
 
     // Reset stop flag for this entity
@@ -1474,13 +1492,17 @@ async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
 
     return { success: errors === 0, synced: success, errors, entities: distinctKeys.length, totalRows, failedIds };
   } catch (err) {
-    // Unregister sync on error
-    if (typeof syncId !== 'undefined') {
+    if (syncId) {
+      sendProgress('banks', {
+        current: 0,
+        total: topLimit,
+        percent: 0,
+        message: `❌ Sync failed: ${err.message}`,
+        status: 'failed'
+      });
       unregisterSync(syncId);
     }
     throw err;
-  } finally {
-    if (pool) await pool.close();
   }
 }
 
@@ -1703,13 +1725,24 @@ async function doSyncProductionBanks(topLimit = 5, trigger = 'manual', bubbleBas
 
     runSingleTableReconciliation('banks', isProduction, bubbleBase).catch(err => console.error('Banks background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
+  } catch (err) {
+    if (syncId) {
+      sendProgress('banks', {
+        current: 0,
+        total: topLimit,
+        percent: 0,
+        message: `❌ Production Sync failed: ${err.message}`,
+        status: 'failed'
+      });
+    }
+    throw err;
   } finally {
     if (syncId) unregisterSync(syncId);
-    if (pool) await pool.close();
   }
 }
 // ─── doSyncPractitioners ─────────────────────────────────────────────────────
 async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
+  let syncId;
   const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   console.log(`[doSyncPractitioners] Called [devRun=${devRun}] [topLimit=${topLimit}] [customIds=${customIds ? customIds.length : null}]`);
   let pool;
@@ -1802,7 +1835,7 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
     let globalMinWatermark = originalWatermark; // Track GLOBAL minimum across flushes
 
     // Register this sync
-    const syncId = generateSyncId('practitioners');
+    syncId = generateSyncId('practitioners');
     registerSync(syncId, 'practitioners');
 
     // Reset stop flag for this entity
@@ -2043,8 +2076,18 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
     });
 
     return { success: errors === 0, synced: success, errors, entities: distinctMemNos.length, totalRows, failedIds };
-  } finally {
-    if (pool) await pool.close();
+  } catch (err) {
+    if (syncId) {
+      sendProgress('practitioners', {
+        current: 0,
+        total: topLimit,
+        percent: 0,
+        message: `❌ Sync failed: ${err.message}`,
+        status: 'failed'
+      });
+      unregisterSync(syncId);
+    }
+    throw err;
   }
 }
 
@@ -2314,14 +2357,25 @@ async function doSyncProductionPractitioners(topLimit = 5, trigger = 'manual', b
 
     runSingleTableReconciliation('practitioners', isProduction, bubbleBase).catch(err => console.error('Practitioners background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
+  } catch (err) {
+    if (syncId) {
+      sendProgress('practitioners', {
+        current: 0,
+        total: topLimit,
+        percent: 0,
+        message: `❌ Production Sync failed: ${err.message}`,
+        status: 'failed'
+      });
+    }
+    throw err;
   } finally {
     if (syncId) unregisterSync(syncId);
-    if (pool) await pool.close();
   }
 }
 
 // ─── doSyncPractitionersAdm ──────────────────────────────────────────────────
 async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
+  let syncId;
   const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   console.log(`[doSyncPractitionersAdm] Called [devRun=${devRun}] [topLimit=${topLimit}] [customIds=${customIds ? customIds.length : null}]`);
   let pool;
@@ -2415,7 +2469,7 @@ async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBa
     let globalMinWatermark = originalWatermark; // Track GLOBAL minimum across flushes
 
     // Register this sync
-    const syncId = generateSyncId('practitionersadm');
+    syncId = generateSyncId('practitionersadm');
     registerSync(syncId, 'practitionersadm');
 
     // Reset stop flag for this entity
@@ -2599,8 +2653,18 @@ async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBa
     });
 
     return { success: errors === 0, synced: success, errors, entities: distinctMemnos.length, totalRows, failedMemos };
-  } finally {
-    if (pool) await pool.close();
+  } catch (err) {
+    if (syncId) {
+      sendProgress('practitionersadm', {
+        current: 0,
+        total: topLimit,
+        percent: 0,
+        message: `❌ Sync failed: ${err.message}`,
+        status: 'failed'
+      });
+      unregisterSync(syncId);
+    }
+    throw err;
   }
 }
 
@@ -2807,13 +2871,24 @@ async function doSyncProductionPractitionersAdm(topLimit = 5, trigger = 'manual'
 
     runSingleTableReconciliation('practitionersadm', isProduction, bubbleBase).catch(err => console.error('PractitionersAdm background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
+  } catch (err) {
+    if (syncId) {
+      sendProgress('practitionersadm', {
+        current: 0,
+        total: topLimit,
+        percent: 0,
+        message: `❌ Production Sync failed: ${err.message}`,
+        status: 'failed'
+      });
+    }
+    throw err;
   } finally {
     if (syncId) unregisterSync(syncId);
-    if (pool) await pool.close();
   }
 }
 // ─── doSyncEmploymentHistory ─────────────────────────────────────────────────
 async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
+  let syncId;
   const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   console.log(`[doSyncEmploymentHistory] Called [devRun=${devRun}] [topLimit=${topLimit}] [customIds=${customIds ? customIds.length : null}]`);
   let pool;
@@ -2910,7 +2985,7 @@ async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleB
     let globalMinWatermark = originalWatermark; // Track GLOBAL minimum across flushes
 
     // Register this sync
-    const syncId = generateSyncId('employmenthistory');
+    syncId = generateSyncId('employmenthistory');
     registerSync(syncId, 'employmenthistory');
 
     // Reset stop flag for this entity
@@ -3123,12 +3198,23 @@ async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleB
     });
 
     return { success: errors === 0, synced: success, errors, entities: distinctKeys.length, totalRows, failedIds };
-  } finally {
-    if (pool) await pool.close();
+  } catch (err) {
+    if (syncId) {
+      sendProgress('employmenthistory', {
+        current: 0,
+        total: topLimit,
+        percent: 0,
+        message: `❌ Sync failed: ${err.message}`,
+        status: 'failed'
+      });
+      unregisterSync(syncId);
+    }
+    throw err;
   }
 }
 
 async function doSyncProductionEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
+  let syncId;
   const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   console.log(`[doSyncProductionEmploymentHistory] Called [devRun=${devRun}] [topLimit=${topLimit}] [customIds=${customIds ? customIds.length : null}]`);
   let pool;
@@ -3155,6 +3241,10 @@ async function doSyncProductionEmploymentHistory(topLimit = 5, trigger = 'manual
     const start = Date.now();
     console.log(`Syncing PRODUCTION employment history after: ${originalWatermark} (TOP ${topLimit}) [devRun=${devRun}]`);
     pool = await sql.connect(importsConfig);
+
+    syncId = generateSyncId('employmenthistory');
+    registerSync(syncId, 'employmenthistory');
+    stopFlags['employmenthistory'] = false;
 
     // SSE: Broadcast sync started
     sendProgress('employmenthistory', {
@@ -3316,13 +3406,25 @@ async function doSyncProductionEmploymentHistory(topLimit = 5, trigger = 'manual
 
     runSingleTableReconciliation('employmenthistory', isProduction, bubbleBase).catch(err => console.error('EmploymentHistory background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
+  } catch (err) {
+    if (syncId) {
+      sendProgress('employmenthistory', {
+        current: 0,
+        total: topLimit,
+        percent: 0,
+        message: `❌ Production Sync failed: ${err.message}`,
+        status: 'failed'
+      });
+    }
+    throw err;
   } finally {
-    if (pool) await pool.close();
+    if (syncId) unregisterSync(syncId);
   }
 }
 
 // ─── doSyncAudits ─────────────────────────────────────────────────────────────
 async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
+  let syncId;
   const bubbleToken = getBubbleCredentials(isProduction, bubbleBase).token;
   console.log(`[doSyncAudits] Called [devRun=${devRun}] [topLimit=${topLimit}] [customIds=${customIds ? customIds.length : null}]`);
   let pool;
@@ -3419,7 +3521,7 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
     let globalMinWatermark = originalWatermark; // Track GLOBAL minimum across flushes
 
     // Register this sync
-    const syncId = generateSyncId('audits');
+    syncId = generateSyncId('audits');
     registerSync(syncId, 'audits');
 
     // Reset stop flag for this entity
@@ -3634,8 +3736,18 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
     });
 
     return { success: errors === 0, synced: success, errors, entities: distinctKeys.length, totalRows, failedIds };
-  } finally {
-    if (pool) await pool.close();
+  } catch (err) {
+    if (syncId) {
+      sendProgress('audits', {
+        current: 0,
+        total: topLimit,
+        percent: 0,
+        message: `❌ Sync failed: ${err.message}`,
+        status: 'failed'
+      });
+      unregisterSync(syncId);
+    }
+    throw err;
   }
 }
 
@@ -3817,9 +3929,19 @@ async function doSyncProductionAudits(topLimit = 5, trigger = 'manual', bubbleBa
 
     runSingleTableReconciliation('audits', isProduction, bubbleBase).catch(err => console.error('Audits background recon failed:', err.message));
     return { success: errors === 0, synced: success, errors, entities: records.length, totalRows, failedIds };
+  } catch (err) {
+    if (syncId) {
+      sendProgress('audits', {
+        current: 0,
+        total: topLimit,
+        percent: 0,
+        message: `❌ Production Sync failed: ${err.message}`,
+        status: 'failed'
+      });
+    }
+    throw err;
   } finally {
     if (syncId) unregisterSync(syncId);
-    if (pool) await pool.close();
   }
 }
 
@@ -3836,7 +3958,6 @@ app.get("/users", async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   } finally {
-    if (pool) await pool.close();
   }
 });
 
@@ -3874,7 +3995,6 @@ app.post("/sync-users", async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   } finally {
-    if (pool) await pool.close();
   }
 });
 
@@ -3905,7 +4025,6 @@ app.get("/firms", async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   } finally {
-    if (pool) await pool.close();
   }
 });
 
@@ -3946,7 +4065,6 @@ app.get("/banks", async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   } finally {
-    if (pool) await pool.close();
   }
 });
 
@@ -3992,7 +4110,6 @@ app.get("/practitioners", async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   } finally {
-    if (pool) await pool.close();
   }
 });
 
@@ -4075,7 +4192,6 @@ app.get('/employment-history', async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   } finally {
-    if (pool) await pool.close();
   }
 });
 
@@ -4135,7 +4251,6 @@ app.get('/audits', async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   } finally {
-    if (pool) await pool.close();
   }
 });
 
@@ -4227,7 +4342,6 @@ app.post('/dashboard/query', async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   } finally {
-    if (pool) await pool.close();
   }
 });
 
@@ -4448,7 +4562,6 @@ app.get('/dashboard/preview/:table', async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   } finally {
-    if (pool) await pool.close();
   }
 });
 
@@ -4569,7 +4682,6 @@ app.get('/dashboard/sql-info', async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   } finally {
-    if (pool) await pool.close();
   }
 });
 
@@ -5011,6 +5123,17 @@ async function getDashboardPool() {
 
 async function runQueryOnPrivatePool(queryStr) {
   const pool = new sql.ConnectionPool(importsConfig);
+  try {
+    await pool.connect();
+    const res = await pool.request().query(queryStr);
+    return res.recordset;
+  } finally {
+    try { await pool.close(); } catch (_) { }
+  }
+}
+
+async function runQueryOnConfig(queryStr, dbConfig) {
+  const pool = new sql.ConnectionPool(dbConfig);
   try {
     await pool.connect();
     const res = await pool.request().query(queryStr);
@@ -5777,27 +5900,21 @@ app.post('/dashboard/reconciliation/details', async (req, res) => {
     return res.json({ success: true, rows: ids.map(id => ({ id, reason: 'N/A' })) });
   }
 
-  let prodPool, stagingPool;
   try {
     if (category === 'Missing in Bubble') {
-      prodPool = await sql.connect(importsConfig);
-      stagingPool = await sql.connect(config);
-
       const idList = ids.map(id => `'${id}'`).join(',');
-      const sqlRowsRes = await prodPool.request().query(`
+      const sqlRows = await runQueryOnConfig(`
         SELECT Id, FirmNo, Year 
         FROM dbo.Aff_FirmFinancialYears 
         WHERE Id IN (${idList})
-      `);
-      const sqlRows = sqlRowsRes.recordset;
+      `, importsConfig);
       const sqlRowsMap = new Map(sqlRows.map(r => [String(r.Id), r]));
 
-      const stagingRowsRes = await stagingPool.request().query(`
+      const stagingRows = await runQueryOnConfig(`
         SELECT ID, FIRMNO, Year, dev_run, trn_dte 
         FROM LPFF_FFC_ITG.dbo.itg_inn_audits
         WHERE ID IN (${idList})
-      `);
-      const stagingRows = stagingRowsRes.recordset;
+      `, config);
       const stagingById = new Map(stagingRows.map(r => [String(r.ID), r]));
 
       const details = [];
@@ -5865,14 +5982,12 @@ app.post('/dashboard/reconciliation/details', async (req, res) => {
       return res.json({ success: true, rows: details });
 
     } else if (category === 'Active audits synced via legacy sync markers (informational only)') {
-      prodPool = await sql.connect(importsConfig);
       const idList = ids.map(id => `'${id}'`).join(',');
-      const sqlRowsRes = await prodPool.request().query(`
+      const sqlRows = await runQueryOnConfig(`
         SELECT Id, FirmNo, Year 
         FROM dbo.Aff_FirmFinancialYears 
         WHERE Id IN (${idList})
-      `);
-      const sqlRows = sqlRowsRes.recordset;
+      `, importsConfig);
       const sqlRowsMap = new Map(sqlRows.map(r => [String(r.Id), r]));
 
       const details = [];
@@ -5899,9 +6014,6 @@ app.post('/dashboard/reconciliation/details', async (req, res) => {
   } catch (err) {
     console.error('Error fetching reconciliation details:', err.message);
     res.status(500).json({ success: false, error: err.message });
-  } finally {
-    if (prodPool) await prodPool.close();
-    if (stagingPool) await stagingPool.close();
   }
 });
 
@@ -6498,7 +6610,6 @@ app.get('/debug/provinces', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   } finally {
-    if (pool) await pool.close();
   }
 });
 // ─── Circuit Breaker Status ──────────────────────────────────────────────────
@@ -6903,8 +7014,6 @@ async function doSyncApplications(topLimit = 5, trigger = 'manual', bubbleBase =
     });
     unregisterImportsSync(table);
     throw err;
-  } finally {
-    if (pool) await pool.close();
   }
 }
 
@@ -7241,8 +7350,6 @@ async function doSyncCertificates(topLimit = 5, trigger = 'manual', bubbleBase =
     });
     unregisterImportsSync(table);
     throw err;
-  } finally {
-    if (pool) await pool.close();
   }
 }
 

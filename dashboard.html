@@ -839,7 +839,6 @@
               <th class="hide-sm">Watermark</th>
               <th>SQL Source</th>
               <th>Status</th>
-              <th>Actions</th>
             </tr></thead>
             <tbody id="live-processes-tbody-schedule"></tbody>
           </table>
@@ -2734,7 +2733,7 @@ function buildRowHtml(t, isScheduleTab) {
   var lastRunStr  = ts ? ts.date + ' ' + ts.time : 'Never';
   var lastStatus  = last ? (last.Status||'').toLowerCase() : '';
   var statusDot   = lastStatus === 'success' ? 'dot-green' : lastStatus === 'partial' ? 'dot-amber' : lastStatus === 'error' ? 'dot-red' : 'dot-grey';
-  var schedLabel  = isScheduled ? 'Every ' + (tableIntervalOverrides[t.id] || settings.interval) + ' min' : '—';
+  var schedLabel  = isScheduled ? 'Every ' + (settings.interval || 15) + ' min' : '—';
   var watermark   = tableWatermarks[t.id] ? formatTimeSplit(tableWatermarks[t.id]) : null;
   var wmStr       = watermark ? watermark.date + ' ' + watermark.time : '—';
   var devRunOn    = tableDevRun[t.id] === 1;
@@ -2777,8 +2776,6 @@ function buildRowHtml(t, isScheduleTab) {
 
   if (!isScheduleTab) {
     cols += '<td><div class="flex gap-8"><button class="btn btn-secondary btn-sm" onclick="runDry(\'' + t.id + '\')">🧪</button><button class="btn btn-primary btn-sm" onclick="runSync(\'' + t.id + '\')" ' + (paused ? 'disabled' : '') + '>▶ Run</button></div></td>';
-  } else {
-    cols += '<td><div class="flex gap-8"><button class="btn btn-secondary btn-sm" onclick="runDry(\'' + t.id + '\')">🧪</button></div></td>';
   }
 
   cols += '</tr>';
@@ -4300,6 +4297,29 @@ function handleSSEProgress(tableId, data) {
   if (data.status === 'started') {
     var logEl = document.getElementById(cardId + '-log');
     if (logEl) logEl.innerHTML = '<div style="color:#74b9ff;">🚀 ' + (data.message || 'Sync started...') + '</div>';
+    return;
+  }
+  
+  if (data.status === 'failed' || data.status === 'error') {
+    disconnectSSE(tableId);
+    var card = document.getElementById(cardId);
+    if (card) card.style.borderLeft = '4px solid #ff7675';
+    var percentEl = document.getElementById(cardId + '-percent');
+    if (percentEl) {
+      percentEl.style.color = '#ff7675';
+      percentEl.textContent = 'Failed';
+    }
+    var barEl = document.getElementById(cardId + '-bar');
+    if (barEl) barEl.style.background = '#ff7675';
+    var stopBtn = document.getElementById(cardId + '-stop');
+    if (stopBtn) stopBtn.style.display = 'none';
+    var statusEl = document.getElementById(cardId + '-status');
+    if (statusEl) statusEl.textContent = '❌ Sync failed';
+    var logEl2 = document.getElementById(cardId + '-log');
+    if (logEl2) {
+      logEl2.innerHTML += '<div style="color:#ff7675;font-weight:700;">❌ ' + (data.message || 'Sync failed!') + '</div>';
+      logEl2.scrollTop = logEl2.scrollHeight;
+    }
     return;
   }
   
