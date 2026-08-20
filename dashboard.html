@@ -830,6 +830,7 @@
         <div style="overflow-x:auto;">
           <table class="proc-list-table">
             <thead><tr>
+              <th style="width:24px;"></th>
               <th style="width:24px;"><input type="checkbox" id="select-all-proc-schedule" onchange="toggleSelectAllSchedule(this)" style="width:14px;height:14px;padding:0;" /></th>
               <th>Process Name</th>
               <th class="hide-sm">Type</th>
@@ -845,11 +846,7 @@
         </div>
       </div>
 
-      <!-- Per-Table Sequence -->
-      <div class="card" style="margin-bottom:16px;">
-        <div class="card-title">Per-Table Sequence (Drag to Reorder)</div>
-        <div id="scheduler-list"></div>
-      </div>
+
 
     </div><!-- end tab-scheduler -->
 
@@ -2747,9 +2744,20 @@ function buildRowHtml(t, isScheduleTab) {
     + '<option value="production" ' + (sourceVal === 'production' ? 'selected' : '') + '>Prod</option>'
     + '</select>';
 
-  var cols = '<tr>'
+  var trAttrs = '<tr>';
+  var dragHandleCol = '';
+  var orderBadge = '';
+
+  if (isScheduleTab) {
+    trAttrs = '<tr draggable="true" data-id="' + t.id + '" ondragstart="schedDragStart(event)" ondragover="schedDragOver(event)" ondrop="schedDrop(event)" style="cursor: grab;">';
+    dragHandleCol = '<td><span class="sched-drag-handle" title="Drag to reorder">⠿</span></td>';
+    orderBadge = '<span class="sched-order-badge" style="margin-right:6px;">#' + (tableOrder.indexOf(t.id) + 1) + '</span>';
+  }
+
+  var cols = trAttrs
+    + dragHandleCol
     + '<td><input type="checkbox" class="proc-checkbox" data-id="' + t.id + '" style="width:14px;height:14px;padding:0;" /></td>'
-    + '<td><div class="proc-list-name"><span class="dot ' + statusDot + '"></span>' + t.label + devBadge + '</div><div class="proc-list-sub">' + t.route + '</div></td>'
+    + '<td><div class="proc-list-name"><span class="dot ' + statusDot + '"></span>' + orderBadge + t.label + devBadge + '</div><div class="proc-list-sub">' + t.route + '</div></td>'
     + '<td class="hide-sm"><span class="badge badge-purple">Data Sync</span></td>'
     + '<td class="hide-sm">' + (isScheduled ? '<span class="badge badge-green">' + schedLabel + '</span>' : '<span class="badge badge-grey">Manual</span>') + '</td>'
     + '<td class="hide-sm" style="font-size:12px;color:var(--text-sub);">' + lastRunStr + '</td>'
@@ -4712,85 +4720,7 @@ function runDryAll() {
 }
 
 // ── SCHEDULER ──
-function renderSchedulerList() {
-  var el = document.getElementById('scheduler-list');
-  if (!el) return;
-  var showDrag     = true;
-  var showOrder    = true;
-
-  el.innerHTML = getOrderedTables().map(function(t, i) {
-    var isPaused  = !!tablePaused[t.id];
-
-    var dragHandle = showDrag
-      ? '<span class="sched-drag-handle" title="Drag to reorder">⠿</span>'
-      : '<span style="width:26px;flex-shrink:0;"></span>';
-
-    var orderBadge = showOrder
-      ? '<span class="sched-order-badge">#' + (i + 1) + '</span>'
-      : '';
-
-    var sourceVal = tableSourceOverrides[t.id] || settings.syncSource || 'staging';
-    var sourceSelectHtml = '<div style="display:flex;align-items:center;gap:6px;">'
-      + '<span style="font-size:12px;color:var(--text-muted);">Source:</span>'
-      + '<select onchange="onTableSourceChange(\'' + t.id + '\',this.value)" style="padding:4px 8px;font-size:11px;border-radius:6px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);">'
-      + '<option value="staging" ' + (sourceVal === 'staging' ? 'selected' : '') + '>Staging</option>'
-      + '<option value="production" ' + (sourceVal === 'production' ? 'selected' : '') + '>Prod</option>'
-      + '</select></div>';
-
-    // Compute sequential scheduler status
-    var countdownVal = '<span style="color:var(--text-muted);">⚪ Waiting</span>';
-    if (schedulerMasterActive) {
-      if (schedulerCurrentTable === t.id) {
-        countdownVal = '<span style="color:var(--green);font-weight:700;">🟡 Syncing...</span>';
-      } else if (schedulerCurrentTable) {
-        var order = getOrderedTables().map(function(tbl){ return tbl.id; });
-        var runningIndex = order.indexOf(schedulerCurrentTable);
-        var selfIndex = order.indexOf(t.id);
-        if (selfIndex < runningIndex) {
-          countdownVal = '<span style="color:var(--green);">✓ Completed</span>';
-        } else {
-          countdownVal = '<span style="color:var(--text-muted);">⚪ Waiting</span>';
-        }
-      } else if (schedulerNextRunTime) {
-        var diff = new Date(schedulerNextRunTime) - new Date();
-        if (diff > 0) {
-          var sec = Math.ceil(diff / 1000);
-          var min = Math.floor(sec / 60);
-          sec = sec % 60;
-          countdownVal = '⏳ ' + min + 'm ' + sec + 's';
-        } else {
-          countdownVal = '⏳ Starting...';
-        }
-      }
-    } else {
-      countdownVal = '—';
-    }
-
-    var failureInfoHtml = '';
-    if (schedulerLastFailureTime && schedulerLastFailureTime[t.id]) {
-      var failTime = new Date(schedulerLastFailureTime[t.id]);
-      var timeStr = failTime.toLocaleTimeString();
-      var errorMsg = schedulerLastFailureMessage[t.id] || 'Unknown error';
-      if (errorMsg.length > 60) errorMsg = errorMsg.slice(0, 57) + '...';
-      failureInfoHtml = '<div style="font-size:10px;color:var(--red);margin-top:2px;font-weight:normal;">❌ Last run failed at ' + timeStr + ': ' + errorMsg + '</div>';
-    }
-
-    return '<div class="scheduler-row" draggable="' + showDrag + '" data-id="' + t.id + '"'
-      + ' ondragstart="schedDragStart(event)" ondragover="schedDragOver(event)" ondrop="schedDrop(event)">'
-      + dragHandle
-      + '<div class="scheduler-name" style="display:flex;flex-direction:column;justify-content:center;gap:2px;">'
-      +   '<div style="display:flex;align-items:center;gap:4px;">'
-      +     orderBadge
-      +     t.label
-      +     (isPaused ? ' <span class="badge badge-amber" style="font-size:10px;margin-left:4px;">Paused</span>' : '')
-      +   '</div>'
-      +   failureInfoHtml
-      + '</div>'
-      + sourceSelectHtml
-      + '<div class="countdown" id="countdown-' + t.id + '" style="margin-left:auto;font-family:monospace;font-size:12px;font-weight:700;">' + countdownVal + '</div>'
-      + '</div>';
-  }).join('');
-}
+function renderSchedulerList() {}
 
 var schedDragSrcId = null;
 function schedDragStart(e) {
