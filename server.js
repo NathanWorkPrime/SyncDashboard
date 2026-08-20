@@ -5999,6 +5999,7 @@ let schedulerState = {
     bubbleBase: DEFAULT_BUBBLE_BASE,
     isProduction: false,
     pausedTables: {},
+    includedTables: {},
     autoPauseCount: 3
   }
 };
@@ -6327,6 +6328,27 @@ app.post('/scheduler/pause', (req, res) => {
   schedulerState.settings.pausedTables[tableId] = !!paused;
   saveSchedulerState();
   res.json({ success: true, pausedTables: schedulerState.settings.pausedTables });
+});
+
+// ─── /scheduler/include ──────────────────────────────────────────────────────
+app.post('/scheduler/include', (req, res) => {
+  const { tableId, included, includedTables } = req.body;
+  if (!schedulerState.settings.includedTables) {
+    schedulerState.settings.includedTables = {};
+  }
+  
+  if (includedTables && typeof includedTables === 'object') {
+    Object.keys(includedTables).forEach(id => {
+      schedulerState.settings.includedTables[id] = !!includedTables[id];
+    });
+  } else if (tableId) {
+    schedulerState.settings.includedTables[tableId] = !!included;
+  } else {
+    return res.status(400).json({ success: false, error: 'Missing tableId or includedTables parameter' });
+  }
+  
+  saveSchedulerState();
+  res.json({ success: true, includedTables: schedulerState.settings.includedTables });
 });
 
 // ─── /scheduler/stop-all-v2 ──────────────────────────────────────────────────

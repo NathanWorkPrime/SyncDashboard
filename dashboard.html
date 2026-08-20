@@ -2761,7 +2761,7 @@ function buildRowHtml(t, isScheduleTab) {
 
   var cols = trAttrs
     + dragHandleCol
-    + '<td><input type="checkbox" class="proc-checkbox" data-id="' + t.id + '" style="width:14px;height:14px;padding:0;" ' + checkedAttr + ' onchange="toggleTableInclusion(\'' + t.id + '\', this.checked)" /></td>'
+    + '<td><input type="checkbox" class="proc-checkbox" data-id="' + t.id + '" style="width:14px;height:14px;padding:0;" ' + checkedAttr + ' onchange="toggleTableInclusion(\'' + t.id + '\', this.checked)" autocomplete="off" /></td>'
     + '<td><div class="proc-list-name"><span class="dot ' + statusDot + '"></span>' + orderBadge + t.label + devBadge + '</div><div class="proc-list-sub">' + t.route + '</div></td>'
     + '<td class="hide-sm"><span class="badge badge-purple">Data Sync</span></td>'
     + '<td class="hide-sm">' + (isScheduled ? '<span class="badge badge-green">' + schedLabel + '</span>' : '<span class="badge badge-grey">Manual</span>') + '</td>'
@@ -2832,13 +2832,33 @@ function isTableIncluded(id) {
 function toggleTableInclusion(id, checked) {
   tableIncluded[id] = !!checked;
   localStorage.setItem('tableIncluded', JSON.stringify(tableIncluded));
+  syncInclusionStateToServer(id, tableIncluded[id]);
   renderLiveProcessesTable();
+}
+function syncInclusionStateToServer(id, isIncluded) {
+  fetch(settings.serverUrl + '/scheduler/include', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tableId: id, included: isIncluded })
+  })
+  .then(function(r){ return r.json(); })
+  .catch(function(err){ console.error('Failed to sync inclusion state:', err.message); });
+}
+function syncInclusionBulkToServer(includedTables) {
+  fetch(settings.serverUrl + '/scheduler/include', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ includedTables: includedTables })
+  })
+  .then(function(r){ return r.json(); })
+  .catch(function(err){ console.error('Failed to sync bulk inclusion state:', err.message); });
 }
 function toggleSelectAll(cb) {
   getOrderedTables().forEach(function(t) {
     tableIncluded[t.id] = cb.checked;
   });
   localStorage.setItem('tableIncluded', JSON.stringify(tableIncluded));
+  syncInclusionBulkToServer(tableIncluded);
   renderLiveProcessesTable();
 }
 function toggleSelectAllSchedule(cb) {
@@ -2846,6 +2866,7 @@ function toggleSelectAllSchedule(cb) {
     tableIncluded[t.id] = cb.checked;
   });
   localStorage.setItem('tableIncluded', JSON.stringify(tableIncluded));
+  syncInclusionBulkToServer(tableIncluded);
   renderLiveProcessesTable();
 }
 
@@ -4913,15 +4934,7 @@ function startAllSchedulers(userInitiated) {
       toast('⚠ Scheduler start failed');
     }
   })
-  .catch(function(err){ toast('✕ Could not reach server: ' + err.message); })
-  .finally(function() {
-    // Reset all checkboxes to checked (one-time filter behavior)
-    getOrderedTables().forEach(function(t) {
-      tableIncluded[t.id] = true;
-    });
-    localStorage.setItem('tableIncluded', JSON.stringify(tableIncluded));
-    renderLiveProcessesTable();
-  });
+  .catch(function(err){ toast('✕ Could not reach server: ' + err.message); });
 }
 
 function stopAllSchedulers() {
@@ -4989,6 +5002,24 @@ function syncSchedulerStatusFromServer() {
         });
         if (anyChanged) {
           localStorage.setItem('tablePaused', JSON.stringify(tablePaused));
+        }
+      }
+
+      // Sync local tableIncluded state from server
+      if (d.settings && d.settings.includedTables) {
+        var anyIncChanged = false;
+        Object.keys(d.settings.includedTables).forEach(function(tableId) {
+          var serverIncluded = d.settings.includedTables[tableId] !== false;
+          if (isTableIncluded(tableId) !== serverIncluded) {
+            tableIncluded[tableId] = serverIncluded;
+            anyIncChanged = true;
+          }
+        });
+        if (anyIncChanged) {
+          localStorage.setItem('tableIncluded', JSON.stringify(tableIncluded));
+          if (document.getElementById('page-processes').classList.contains('active')) {
+            renderLiveProcessesTable();
+          }
         }
       }
 
