@@ -2046,6 +2046,7 @@ var tableTopOverrides    = {};
 var tableIntervalOverrides = {};
 var tableSourceOverrides  = {};
 var tablePaused          = {};
+var tableIncluded        = {};
 var tableNotes           = {};
 var tableWatermarks      = {};
 var tableDevRun          = {};
@@ -2121,6 +2122,7 @@ function loadFromStorage() {
     var ti  = localStorage.getItem('tableIntOverrides');   if (ti)  tableIntervalOverrides = JSON.parse(ti);
     var tso = localStorage.getItem('tableSourceOverrides'); if (tso) tableSourceOverrides  = JSON.parse(tso);
     var pp  = localStorage.getItem('tablePaused');         if (pp)  tablePaused            = JSON.parse(pp);
+    var tin = localStorage.getItem('tableIncluded');       if (tin) tableIncluded          = JSON.parse(tin);
     var al  = localStorage.getItem('activityLog');         if (al)  activityLog            = JSON.parse(al);
     var lr  = localStorage.getItem('tableLastRun');        if (lr)  tableLastRun           = JSON.parse(lr);
     var rs  = localStorage.getItem('tableRunStats');       if (rs)  tableRunStats          = JSON.parse(rs);
@@ -2754,9 +2756,12 @@ function buildRowHtml(t, isScheduleTab) {
     orderBadge = '<span class="sched-order-badge" style="margin-right:6px;">#' + (tableOrder.indexOf(t.id) + 1) + '</span>';
   }
 
+  var isIncluded = isTableIncluded(t.id);
+  var checkedAttr = isIncluded ? 'checked' : '';
+
   var cols = trAttrs
     + dragHandleCol
-    + '<td><input type="checkbox" class="proc-checkbox" data-id="' + t.id + '" style="width:14px;height:14px;padding:0;" checked /></td>'
+    + '<td><input type="checkbox" class="proc-checkbox" data-id="' + t.id + '" style="width:14px;height:14px;padding:0;" ' + checkedAttr + ' onchange="toggleTableInclusion(\'' + t.id + '\', this.checked)" /></td>'
     + '<td><div class="proc-list-name"><span class="dot ' + statusDot + '"></span>' + orderBadge + t.label + devBadge + '</div><div class="proc-list-sub">' + t.route + '</div></td>'
     + '<td class="hide-sm"><span class="badge badge-purple">Data Sync</span></td>'
     + '<td class="hide-sm">' + (isScheduled ? '<span class="badge badge-green">' + schedLabel + '</span>' : '<span class="badge badge-grey">Manual</span>') + '</td>'
@@ -2803,6 +2808,13 @@ function renderLiveProcessesTable() {
       return buildRowHtml(t, true);
     }).join('');
   }
+
+  // Update select-all checkboxes based on current inclusion states
+  var allIncluded = tables.length > 0 && tables.every(function(t) { return isTableIncluded(t.id); });
+  var selectAllProc = document.getElementById('select-all-proc');
+  var selectAllProcSched = document.getElementById('select-all-proc-schedule');
+  if (selectAllProc) selectAllProc.checked = allIncluded;
+  if (selectAllProcSched) selectAllProcSched.checked = allIncluded;
 }
 
 function togglePauseFromTable(id, enabled) {
@@ -2814,8 +2826,28 @@ function togglePauseFromTable(id, enabled) {
   document.getElementById('stat-instances').textContent = ac;
   document.getElementById('stat-instances-sub').textContent = ac + ' of ' + TABLES.length + ' tables active';
 }
-function toggleSelectAll(cb) { document.querySelectorAll('#live-processes-tbody .proc-checkbox').forEach(function(c){ c.checked = cb.checked; }); }
-function toggleSelectAllSchedule(cb) { document.querySelectorAll('#live-processes-tbody-schedule .proc-checkbox').forEach(function(c){ c.checked = cb.checked; }); }
+function isTableIncluded(id) {
+  return tableIncluded[id] !== false;
+}
+function toggleTableInclusion(id, checked) {
+  tableIncluded[id] = !!checked;
+  localStorage.setItem('tableIncluded', JSON.stringify(tableIncluded));
+  renderLiveProcessesTable();
+}
+function toggleSelectAll(cb) {
+  getOrderedTables().forEach(function(t) {
+    tableIncluded[t.id] = cb.checked;
+  });
+  localStorage.setItem('tableIncluded', JSON.stringify(tableIncluded));
+  renderLiveProcessesTable();
+}
+function toggleSelectAllSchedule(cb) {
+  getOrderedTables().forEach(function(t) {
+    tableIncluded[t.id] = cb.checked;
+  });
+  localStorage.setItem('tableIncluded', JSON.stringify(tableIncluded));
+  renderLiveProcessesTable();
+}
 
 // ── SYNC CONTROL CARDS ──
 function renderSyncControlList() {
@@ -4848,8 +4880,8 @@ function startAllSchedulers(userInitiated) {
 
   // Capture checkbox state for per-run scheduler inclusion
   var included = {};
-  document.querySelectorAll('#live-processes-tbody-schedule .proc-checkbox').forEach(function(c) {
-    included[c.dataset.id] = c.checked;
+  getOrderedTables().forEach(function(t) {
+    included[t.id] = isTableIncluded(t.id);
   });
 
   fetch(settings.serverUrl + '/scheduler/start-all', {
@@ -4884,11 +4916,11 @@ function startAllSchedulers(userInitiated) {
   .catch(function(err){ toast('✕ Could not reach server: ' + err.message); })
   .finally(function() {
     // Reset all checkboxes to checked (one-time filter behavior)
-    document.querySelectorAll('#live-processes-tbody-schedule .proc-checkbox').forEach(function(c) {
-      c.checked = true;
+    getOrderedTables().forEach(function(t) {
+      tableIncluded[t.id] = true;
     });
-    var selectAll = document.getElementById('select-all-proc-schedule');
-    if (selectAll) selectAll.checked = true;
+    localStorage.setItem('tableIncluded', JSON.stringify(tableIncluded));
+    renderLiveProcessesTable();
   });
 }
 
@@ -5430,9 +5462,15 @@ function runImportsSync(table) {
   
   // Set UI state to active
   importsActiveSyncs[table] = true;
-  document.getElementById('imports-active-val').textContent = 'Running';
-  document.getElementById('imports-active-val').className = 'stat-value text-amber';
-  document.getElementById('imports-active-sub').textContent = 'Syncing ' + table + '...';
+  var activeVal = document.getElementById('imports-active-val');
+  var activeSub = document.getElementById('imports-active-sub');
+  if (activeVal) {
+    activeVal.textContent = 'Running';
+    activeVal.className = 'stat-value text-amber';
+  }
+  if (activeSub) {
+    activeSub.textContent = 'Syncing ' + table + '...';
+  }
   
   // Show progress panel
   var progressPanel = document.getElementById('imports-live-sync-panel');
@@ -5679,9 +5717,15 @@ function resetImportsUI(table, statusText, badgeClass) {
   }
   
   if (!anyActive) {
-    document.getElementById('imports-active-val').textContent = 'Idle';
-    document.getElementById('imports-active-val').className = 'stat-value';
-    document.getElementById('imports-active-sub').textContent = 'No active import';
+    var activeVal = document.getElementById('imports-active-val');
+    var activeSub = document.getElementById('imports-active-sub');
+    if (activeVal) {
+      activeVal.textContent = 'Idle';
+      activeVal.className = 'stat-value';
+    }
+    if (activeSub) {
+      activeSub.textContent = 'No active import';
+    }
     
     var progressPanel = document.getElementById('imports-live-sync-panel');
     if (progressPanel) {
