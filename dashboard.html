@@ -106,14 +106,7 @@
     .notif-time { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
     .notif-empty { padding: 32px 16px; text-align: center; color: var(--text-muted); font-size: 13px; }
 
-    /* help shortcut tooltip */
-    .help-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border-2); background: var(--surface-2); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: var(--text-sub); transition: all 0.15s; }
-    .help-btn:hover { background: var(--purple-light); color: var(--purple); border-color: var(--purple); }
 
-    /* shortcuts modal content */
-    .shortcut-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
-    .shortcut-row:last-child { border-bottom: none; }
-    .shortcut-key { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 24px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; font-size: 12px; font-weight: 700; color: var(--text); padding: 0 6px; font-family: monospace; }
 
     /* ── LAYOUT ── */
     .main { margin-top: 56px; padding: 0; min-height: calc(100vh - 56px); width: 100%; }
@@ -133,7 +126,7 @@
     .page-hero-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; position: relative; z-index: 1; }
     .page-hero-title { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; color: #fff; }
     .page-hero-sub { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 3px; }
-    .page-hero-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .page-hero-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .btn-hero-primary   { background: rgba(255,255,255,0.18); color: #fff; border: 1px solid rgba(255,255,255,0.28); backdrop-filter: blur(4px); }
     .btn-hero-primary:hover   { background: rgba(255,255,255,0.28); }
     .btn-hero-secondary { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.85); border: 1px solid rgba(255,255,255,0.15); }
@@ -515,7 +508,6 @@
       🔔<span class="notif-dot" id="notif-dot"></span>
     </button>
     <button class="dark-toggle" onclick="toggleDarkMode()" id="dark-btn" title="Toggle dark mode">🌙</button>
-    <button class="help-btn" onclick="openModal('modal-shortcuts')" title="Keyboard shortcuts">?</button>
     <button class="btn btn-secondary btn-sm" onclick="checkServer()">↻</button>
   </div>
 </nav>
@@ -669,8 +661,8 @@
           <div class="page-hero-sub">Manage routing, run syncs manually and configure schedules per table</div>
         </div>
         <div class="page-hero-actions">
-          <button class="btn btn-hero-secondary" onclick="runDryAll()">🧪 Dry Run All</button>
-          <button class="btn btn-hero-primary"   onclick="runAll()">▶ Run All</button>
+          <button class="btn btn-hero-secondary btn-sm" onclick="runDryAll()">🧪 Dry Run All</button>
+          <button class="btn btn-hero-primary btn-sm"   onclick="runAll()">▶ Run All</button>
         </div>
       </div>
     </div>
@@ -1115,7 +1107,7 @@
           <div class="page-hero-sub">Every sync run logged with duration, record counts, trigger and error rate</div>
         </div>
         <div class="page-hero-actions">
-          <button class="btn btn-hero-secondary" onclick="exportHistoryCSV()">⬇ Export CSV</button>
+          <button class="btn btn-hero-secondary btn-sm" onclick="exportHistoryCSV()">⬇ Export CSV</button>
           <button class="btn btn-hero-secondary btn-sm" onclick="cachedLogs=[];loadHistory()">🔄 Refresh</button>
         </div>
       </div>
@@ -1430,7 +1422,7 @@
 <div class="page" id="page-errors">
   <div class="breadcrumb"><span>Dashboard</span><span class="breadcrumb-sep">›</span><span class="breadcrumb-current">Error Tracking</span></div>
   <div class="page-hero-wrap">
-    <div class="page-hero">
+    <div class="page-hero" style="background: linear-gradient(135deg, var(--red) 0%, #1e1b4b 100%);">
       <div class="page-hero-inner">
         <div>
           <div class="page-hero-title">Error Tracking</div>
@@ -1546,6 +1538,7 @@
           <option value="20">Show 20</option>
           <option value="50" selected>Show 50</option>
           <option value="100">Show 100</option>
+          <option value="250">Show 250</option>
           <option value="">Show All</option>
         </select>
 
@@ -1801,7 +1794,7 @@
           <div class="page-hero-title">Live Comparison Dashboard</div>
           <div class="page-hero-sub">Executive overview of database synchronization health, record counts, and field-level alignment.</div>
         </div>
-        <div class="page-hero-actions" style="display: flex; align-items: center; gap: 12px;">
+        <div class="page-hero-actions">
           <button class="btn btn-hero-primary btn-sm" id="btn-trigger-reconciliation" onclick="triggerReconciliation()">
             🔄 Reconcile Now
           </button>
@@ -1991,23 +1984,7 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="modal-shortcuts">
-  <div class="modal">
-    <div class="modal-title">⌨️ Keyboard Shortcuts</div>
-    <div class="shortcut-row"><span>Overview</span><span class="shortcut-key">O</span></div>
-    <div class="shortcut-row"><span>Processes</span><span class="shortcut-key">P</span></div>
-    <div class="shortcut-row"><span>Sync History</span><span class="shortcut-key">H</span></div>
-    <div class="shortcut-row"><span>Data Preview</span><span class="shortcut-key">D</span></div>
-    <div class="shortcut-row"><span>Error Tracking</span><span class="shortcut-key">E</span></div>
-    <div class="shortcut-row"><span>Imports</span><span class="shortcut-key">I</span></div>
-    <div class="shortcut-row"><span>Manual Push</span><span class="shortcut-key">U</span></div>
-    <div class="shortcut-row"><span>Settings</span><span class="shortcut-key">S</span></div>
-    <div class="shortcut-row"><span>Run All Syncs</span><span class="shortcut-key">R</span></div>
-    <div class="shortcut-row"><span>Toggle Dark Mode</span><span class="shortcut-key">M</span></div>
-    <div class="shortcut-row"><span>Close Modal</span><span class="shortcut-key">Esc</span></div>
-    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('modal-shortcuts')">Close</button></div>
-  </div>
-</div>
+
 
 <div class="modal-overlay" id="modal-reprocess-ids">
   <div class="modal" style="max-width: 750px; width: 90%;">
@@ -2126,17 +2103,7 @@ window.addEventListener('DOMContentLoaded', function() {
 }, 30000);
 });
 
-// ── KEYBOARD SHORTCUTS ──
-document.addEventListener('keydown', function(e) {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-  var modals = document.querySelectorAll('.modal-overlay.open');
-  if (e.key === 'Escape') { modals.forEach(function(m){ m.classList.remove('open'); }); closeNotifPanel(); return; }
-  if (modals.length) return;
-  var map = { 'o':'overview', 'O':'overview', 'p':'processes', 'P':'processes', 'd':'preview', 'D':'preview', 'h':'history', 'H':'history', 'e':'errors', 'E':'errors', 's':'settings', 'S':'settings', 'i':'imports', 'I':'imports', 'u':'manual-push', 'U':'manual-push' };
-  if (map[e.key]) { showPage(map[e.key]); return; }
-  if (e.key === 'r' || e.key === 'R') { runAll(); toast('▶ Running all syncs...'); return; }
-  if (e.key === 'm' || e.key === 'M') { toggleDarkMode(); return; }
-});
+
 
 function loadFromStorage() {
   try {
@@ -3271,7 +3238,8 @@ function applyHistoryFilters(logs, el) {
   if (fdt) historyFiltered = historyFiltered.filter(function(l){ return new Date(l.RunTimestamp).toISOString().slice(0,10) <= fdt; });
 
   var limitEl = document.getElementById('history-limit');
-  historyPageSize    = parseInt((limitEl || {}).value) || 50;
+  var limitVal = (limitEl || {}).value;
+  historyPageSize    = limitVal === '' ? Infinity : (parseInt(limitVal) || 50);
   historyCurrentPage = 1;
 
   renderHistorySummary(historyFiltered);
@@ -3398,7 +3366,7 @@ function renderHistoryPage(el) {
   var totalPages = Math.max(1, Math.ceil(historyFiltered.length / historyPageSize));
   if (historyCurrentPage > totalPages) historyCurrentPage = totalPages;
 
-  var start = (historyCurrentPage - 1) * historyPageSize;
+  var start = historyPageSize === Infinity ? 0 : (historyCurrentPage - 1) * historyPageSize;
   var paged = historyFiltered.slice(start, start + historyPageSize);
 
   renderHistoryTable(paged, el);
@@ -3769,7 +3737,8 @@ function applyErrorFilters() {
   const fromVal     = document.getElementById('err-filter-from').value;
   const toVal       = document.getElementById('err-filter-to').value;
 
-  errorsPageSize    = parseInt(document.getElementById('err-page-size').value) || 50;
+  const sizeVal = document.getElementById('err-page-size').value;
+  errorsPageSize    = sizeVal === '' ? Infinity : (parseInt(sizeVal) || 50);
   errorsCurrentPage = 1;
 
   filteredErrors = cachedErrors.filter(e => {
@@ -3808,7 +3777,7 @@ function renderErrorsPage() {
   const totalPages = Math.max(1, Math.ceil(filteredErrors.length / errorsPageSize));
   if (errorsCurrentPage > totalPages) errorsCurrentPage = totalPages;
 
-  const start = (errorsCurrentPage - 1) * errorsPageSize;
+  const start = errorsPageSize === Infinity ? 0 : (errorsCurrentPage - 1) * errorsPageSize;
   const paged = filteredErrors.slice(start, start + errorsPageSize);
 
   renderErrorTable(paged);
@@ -6644,7 +6613,7 @@ async function loadLiveDashboard() {
         let deltaHtml = '—';
         if (!isUnknown && typeof t.sqlCount === 'number' && typeof t.bubbleCount === 'number') {
           const delta = t.sqlCount - t.bubbleCount;
-          deltaHtml = t.id === 'audits' 
+          deltaHtml = (t.id === 'audits' || t.id === 'applications')
             ? `${delta.toLocaleString()}<br><span style="font-size:9px; color:var(--green); font-weight:600; display:block; margin-top:2px;">Gap Explained (0 Unreconciled)</span>`
             : delta.toLocaleString();
         }
@@ -6730,6 +6699,49 @@ async function loadLiveDashboard() {
                   </div>
                 </div>
                 ` : ''}
+
+                ${t.id === 'applications' ? (function() {
+                  const gap = t.bubbleCount - t.sqlCount;
+                  const bubbleDupes = t.bubbleDuplicates || 0;
+                  const inactiveInBubble = gap - bubbleDupes + (t.missingInBubble || 0) - (t.missingInSQL || 0);
+                  const inactivePct = gap > 0 ? (inactiveInBubble / gap) * 100 : 0;
+                  const dupePct = gap > 0 ? (bubbleDupes / gap) * 100 : 0;
+                  
+                  return `
+                  <!-- Applications Count Reconciliation Breakdown Box -->
+                  <div style="background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--blue); border-radius: 6px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                    <strong style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-sub); display: block; margin-bottom: 10px;">SQL vs. Bubble Count Reconciliation Breakdown (Gap: ${gap.toLocaleString()} records)</strong>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                      
+                      <div style="border: 1px solid var(--border-2); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface-2);">
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                          <span style="font-size: 14px; font-weight: 700; color: var(--blue); line-height: 1.2;">${inactiveInBubble.toLocaleString()}<span style="font-size: 10px; font-weight: 500; color: var(--text-muted); margin-left: 2px;">(${inactivePct.toFixed(2)}% of gap)</span></span>
+                          <span style="font-size: 11px; font-weight: 500; color: var(--text-sub);">Inactive Records in Bubble</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); text-align: right; max-width: 480px;">
+                          These records are marked as inactive in Bubble, so they are excluded from the active SQL count query but remain in Bubble database storage.
+                        </div>
+                      </div>
+
+                      <div style="border: 1px solid var(--border-2); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface-2);">
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                          <span style="font-size: 14px; font-weight: 700; color: var(--blue); line-height: 1.2;">${bubbleDupes.toLocaleString()}<span style="font-size: 10px; font-weight: 500; color: var(--text-muted); margin-left: 2px;">(${dupePct.toFixed(2)}% of gap)</span></span>
+                          <span style="font-size: 11px; font-weight: 500; color: var(--text-sub);">Bubble-Only Legacy Duplicate Records</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); text-align: right; max-width: 480px;">
+                          Duplicate records existing in Bubble from the pre-GUID matching era.
+                        </div>
+                      </div>
+
+                      <div style="border-top: 1px dashed var(--border); padding-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 600; color: var(--text-2);">
+                        <span>Total Reconciled Gap:</span>
+                        <span style="color: var(--green);">${inactiveInBubble.toLocaleString()} + ${bubbleDupes.toLocaleString()} = ${gap.toLocaleString()} (100.00% Reconciled)</span>
+                      </div>
+
+                    </div>
+                  </div>
+                  `;
+                })() : ''}
 
                 <!-- Dual List Grid -->
                 <div style="display: flex; gap: 16px; flex-wrap: wrap;">
