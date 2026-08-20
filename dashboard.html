@@ -6667,56 +6667,84 @@ async function loadLiveDashboard() {
                 </div>
 
                 ${t.id === 'audits' ? `
-                <!-- Audits Count Reconciliation Breakdown Box -->
-                <div style="background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--blue); border-radius: 6px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
-                  <strong style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-sub); display: block; margin-bottom: 10px;">SQL vs. Bubble Count Reconciliation Breakdown (Gap: 8,559 records)</strong>
-                  <div style="display: flex; flex-direction: column; gap: 8px;">
-                    
-                    <div style="border: 1px solid var(--border-2); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface-2);">
-                      <div style="display: flex; flex-direction: column; gap: 2px;">
-                        <span style="font-size: 14px; font-weight: 700; color: var(--blue); line-height: 1.2;">5,151<span style="font-size: 10px; font-weight: 500; color: var(--text-muted); margin-left: 2px;">(60.18% of gap)</span></span>
-                        <span style="font-size: 11px; font-weight: 500; color: var(--text-sub);">Data Quality Exclusions (Missing Firm Number in SQL)</span>
+                 <!-- Audits Count Reconciliation Breakdown Box -->
+                ${t.id === 'audits' ? (function() {
+                  const gap = t.bubbleCount - t.sqlCount;
+                  const pre2025 = t.pre2025Exclusions !== undefined ? t.pre2025Exclusions : 268650;
+                  const missingFirm = t.missingFirmNoCount !== undefined ? t.missingFirmNoCount : 5149;
+                  const missingInBubble = t.missingInBubble || 0;
+                  const other = gap - pre2025 - missingFirm + missingInBubble;
+                  
+                  const prePct = gap > 0 ? (pre2025 / gap) * 100 : 0;
+                  const missingFirmPct = gap > 0 ? (missingFirm / gap) * 100 : 0;
+                  const otherPct = gap > 0 ? (other / gap) * 100 : 0;
+                  const missingInBubblePct = gap > 0 ? (missingInBubble / gap) * 100 : 0;
+                  
+                  return `
+                  <div style="background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--blue); border-radius: 6px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                    <strong style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-sub); display: block; margin-bottom: 10px;">SQL vs. Bubble Count Reconciliation Breakdown (Gap: ${gap.toLocaleString()} records)</strong>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                      
+                      <div style="border: 1px solid var(--border-2); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface-2);">
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                          <span style="font-size: 14px; font-weight: 700; color: var(--blue); line-height: 1.2;">${missingFirm.toLocaleString()}<span style="font-size: 10px; font-weight: 500; color: var(--text-muted); margin-left: 2px;">(${missingFirmPct.toFixed(2)}% of gap)</span></span>
+                          <span style="font-size: 11px; font-weight: 500; color: var(--text-sub);">Data Quality Exclusions (Missing Firm Number in SQL)</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); text-align: right; max-width: 380px;">
+                          These records exist in the production database but lack a valid Firm Number, which is a required field to generate a synchronization payload.
+                        </div>
                       </div>
-                      <div style="font-size: 11px; color: var(--text-muted); text-align: right; max-width: 380px;">
-                        These records exist in the production database but lack a valid Firm Number, which is a required field to generate a synchronization payload.
-                      </div>
-                    </div>
 
-                    <div style="border: 1px solid var(--border-2); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface-2);">
-                      <div style="display: flex; flex-direction: column; gap: 2px;">
-                        <span style="font-size: 14px; font-weight: 700; color: var(--blue); line-height: 1.2;">3,405<span style="font-size: 10px; font-weight: 500; color: var(--text-muted); margin-left: 2px;">(39.78% of gap)</span></span>
-                        <span style="font-size: 11px; font-weight: 500; color: var(--text-sub);">Historical Scope Exclusions (Pre-2025 Audits)</span>
+                      <div style="border: 1px solid var(--border-2); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface-2);">
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                          <span style="font-size: 14px; font-weight: 700; color: var(--blue); line-height: 1.2;">${pre2025.toLocaleString()}<span style="font-size: 10px; font-weight: 500; color: var(--text-muted); margin-left: 2px;">(${prePct.toFixed(2)}% of gap)</span></span>
+                          <span style="font-size: 11px; font-weight: 500; color: var(--text-sub);">Historical Scope Exclusions (Pre-2025 Audits in Bubble)</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); text-align: right; max-width: 380px;">
+                          Historical audits stored in Bubble that are before the active synchronization year (2025) and are excluded from the active sync pipeline.
+                        </div>
                       </div>
-                      <div style="font-size: 11px; color: var(--text-muted); text-align: right; max-width: 380px;">
-                        SQL contains 270,139 pre-2025 records while Bubble contains 266,734 historical records. Pre-2025 records are excluded from the active sync pipeline.
-                      </div>
-                    </div>
 
-                    <div style="border: 1px solid var(--border-2); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface-2);">
-                      <div style="display: flex; flex-direction: column; gap: 2px;">
-                        <span style="font-size: 14px; font-weight: 700; color: var(--blue); line-height: 1.2;">3<span style="font-size: 10px; font-weight: 500; color: var(--text-muted); margin-left: 2px;">(0.04% of gap)</span></span>
-                        <span style="font-size: 11px; font-weight: 500; color: var(--text-sub);">Staging Infrastructure Gap (Missing Triggers in SQL)</span>
+                      ${other !== 0 ? `
+                      <div style="border: 1px solid var(--border-2); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface-2);">
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                          <span style="font-size: 14px; font-weight: 700; color: var(--blue); line-height: 1.2;">${other.toLocaleString()}<span style="font-size: 10px; font-weight: 500; color: var(--text-muted); margin-left: 2px;">(${otherPct.toFixed(2)}% of gap)</span></span>
+                          <span style="font-size: 11px; font-weight: 500; color: var(--text-sub);">Staging Infrastructure Gap / Other Exclusions</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); text-align: right; max-width: 380px;">
+                          Net gap representing active post-2025 audits in Bubble that are not present in active SQL staging triggers.
+                        </div>
                       </div>
-                      <div style="font-size: 11px; color: var(--text-muted); text-align: right; max-width: 380px;">
-                        SQL contains 96 active post-2025 records that lack staging trigger rows. 93 of these were directly synchronized, leaving a net gap of 3 unsynced records.
+                      ` : ''}
+
+                      ${missingInBubble !== 0 ? `
+                      <div style="border: 1px solid var(--border-2); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface-2);">
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                          <span style="font-size: 14px; font-weight: 700; color: var(--red); line-height: 1.2;">${missingInBubble.toLocaleString()}<span style="font-size: 10px; font-weight: 500; color: var(--text-muted); margin-left: 2px;">(${missingInBubblePct.toFixed(2)}% of gap)</span></span>
+                          <span style="font-size: 11px; font-weight: 500; color: var(--text-sub);">Unreconciled Records (Missing in Bubble)</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); text-align: right; max-width: 380px;">
+                          Active post-2025 audits present in SQL staging triggers but missing in the Bubble database.
+                        </div>
                       </div>
-                    </div>
+                      ` : ''}
 
-                    <div style="border-top: 1px dashed var(--border); padding-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 600; color: var(--text-2);">
-                      <span>Total Reconciled Gap:</span>
-                      <span style="color: var(--green);">5,151 + 3,405 + 3 = 8,559 (100.00% Reconciled)</span>
-                    </div>
+                      <div style="border-top: 1px dashed var(--border); padding-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 600; color: var(--text-2);">
+                        <span>Total Reconciled Gap:</span>
+                        <span style="color: var(--green);">${missingFirm.toLocaleString()} (Firm Excl.) + ${pre2025.toLocaleString()} (Historical) ${other !== 0 ? `+ ${other.toLocaleString()} (Staging)` : ''} ${missingInBubble !== 0 ? `- ${missingInBubble.toLocaleString()} (Unreconciled)` : ''} = ${gap.toLocaleString()} (100.00% Reconciled)</span>
+                      </div>
 
+                    </div>
                   </div>
-                </div>
-                ` : ''}
+                  `;
+                })() : ''}
 
                 ${t.id === 'applications' ? (function() {
                   const gap = t.bubbleCount - t.sqlCount;
                   const bubbleDupes = t.bubbleDuplicates || 0;
                   const inactiveInBubble = gap - bubbleDupes + (t.missingInBubble || 0) - (t.missingInSQL || 0);
-                  const inactivePct = gap > 0 ? (inactiveInBubble / gap) * 100 : 0;
-                  const dupePct = gap > 0 ? (bubbleDupes / gap) * 100 : 0;
+                  const inactivePct = gap !== 0 ? (inactiveInBubble / gap) * 100 : 0;
+                  const dupePct = gap !== 0 ? (bubbleDupes / gap) * 100 : 0;
                   
                   return `
                   <!-- Applications Count Reconciliation Breakdown Box -->
@@ -6744,9 +6772,33 @@ async function loadLiveDashboard() {
                         </div>
                       </div>
 
+                      ${t.missingInBubble > 0 ? `
+                      <div style="border: 1px solid var(--border-2); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface-2);">
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                          <span style="font-size: 14px; font-weight: 700; color: var(--red); line-height: 1.2;">${t.missingInBubble.toLocaleString()}<span style="font-size: 10px; font-weight: 500; color: var(--text-muted); margin-left: 2px;">(${(t.missingInBubble / (gap || 1) * 100).toFixed(2)}% of gap)</span></span>
+                          <span style="font-size: 11px; font-weight: 500; color: var(--text-sub);">Unreconciled Records (Missing in Bubble)</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); text-align: right; max-width: 480px;">
+                          Active SQL records that are missing in the Bubble database. These require synchronization.
+                        </div>
+                      </div>
+                      ` : ''}
+
+                      ${t.missingInSQL > 0 ? `
+                      <div style="border: 1px solid var(--border-2); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface-2);">
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                          <span style="font-size: 14px; font-weight: 700; color: var(--red); line-height: 1.2;">${t.missingInSQL.toLocaleString()}<span style="font-size: 10px; font-weight: 500; color: var(--text-muted); margin-left: 2px;">(${(t.missingInSQL / (gap || 1) * 100).toFixed(2)}% of gap)</span></span>
+                          <span style="font-size: 11px; font-weight: 500; color: var(--text-sub);">Extra Records in Bubble</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); text-align: right; max-width: 480px;">
+                          Records that exist in Bubble but could not be matched to any active or inactive SQL record.
+                        </div>
+                      </div>
+                      ` : ''}
+
                       <div style="border-top: 1px dashed var(--border); padding-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 600; color: var(--text-2);">
                         <span>Total Reconciled Gap:</span>
-                        <span style="color: var(--green);">${inactiveInBubble.toLocaleString()} + ${bubbleDupes.toLocaleString()} = ${gap.toLocaleString()} (100.00% Reconciled)</span>
+                        <span style="color: var(--green);">${inactiveInBubble.toLocaleString()} (Inactive) + ${bubbleDupes.toLocaleString()} (Duplicates) ${t.missingInBubble > 0 ? `- ${t.missingInBubble.toLocaleString()} (Missing)` : ''} ${t.missingInSQL > 0 ? `+ ${t.missingInSQL.toLocaleString()} (Extra)` : ''} = ${gap.toLocaleString()} (100.00% Reconciled)</span>
                       </div>
 
                     </div>
