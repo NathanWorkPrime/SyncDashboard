@@ -4893,7 +4893,12 @@ const RECON_CONFIG = {
                INNER JOIN dbo.Core_Persons pe ON pe.Id = l.LicenseHolderPersonId AND pe.Frwk_InactiveFlag = 0
                WHERE l.Frwk_InactiveFlag = 0 AND a.Frwk_InactiveFlag = 0`,
     getSqlKey: r => String(r.sql_key || '').trim().toLowerCase(),
-    getBubbleKey: r => String(r['id'] || r['ID'] || '').trim().toLowerCase(),
+    getBubbleKey: r => {
+      if (r['Inactive Flag'] === 1 || r['Inactive Flag'] === '1' || r['Inactive Flag'] === true || String(r['Inactive Flag']).toLowerCase() === 'yes') {
+        return null;
+      }
+      return String(r['id'] || r['ID'] || '').trim().toLowerCase();
+    },
     integrityRules: [
       {
         name: "Active Certificate with missing Holder Link",
@@ -5074,7 +5079,7 @@ async function fetchLiveCounts(bubbleBase, bubbleToken) {
       employmenthistory: 'obj/lpff.employment.history.view?limit=1',
       audits: `obj/lpff.firm.audits.view?limit=1&constraints=${encodeURIComponent(JSON.stringify([{key:'Discriminator',constraint_type:'not equal',value:'AFF.FfcFirmQuestionnaire'}]))}`,
       applications: 'obj/lpff.application.view?limit=1&constraints=' + encodeURIComponent(JSON.stringify([{key: 'Inactive Flag', constraint_type: 'equals', value: 0}])),
-      certificates: 'obj/lpff.certificates.view?limit=1'
+      certificates: 'obj/lpff.certificates.view?limit=1&constraints=' + encodeURIComponent(JSON.stringify([{key: 'Inactive Flag', constraint_type: 'equals', value: false}]))
     };
 
     const bubblePromises = Object.entries(urls).map(async ([key, path]) => {
@@ -7071,7 +7076,7 @@ async function doSyncCertificates(topLimit = 5, trigger = 'manual', bubbleBase =
 
         if (wr.ok) {
           if (ENABLE_DEV_RUN_WRITEBACK) {
-            await writeBackDevRun(pool, 'dbo.Cert_Certificates', 'Id', record.Id);
+            await writeBackDevRun(pool, 'dbo.Lic_Licenses', 'Id', record.Id);
           }
           success++;
           latestTimestamp = record.Frwk_LastUpdatedTimestamp.toISOString();
