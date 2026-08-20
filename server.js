@@ -6052,12 +6052,14 @@ function recoverSchedulerState() {
       schedulerState.settings.sources,
       schedulerState.settings.bubbleBase,
       schedulerState.settings.isProduction,
-      schedulerState.settings.autoPauseCount
+      schedulerState.settings.autoPauseCount,
+      schedulerState.settings.pausedTables,
+      schedulerState.settings.includedTables
     );
   }
 }
 
-async function startSequentialSequence(order, staggerSecs, intervalMinutes, topLimit, sources, bubbleBase, isProduction, autoPauseCount = 3, pausedTables = null) {
+async function startSequentialSequence(order, staggerSecs, intervalMinutes, topLimit, sources, bubbleBase, isProduction, autoPauseCount = 3, pausedTables = null, includedTables = null) {
   if (currentSequencePromise) {
     console.warn('⚠️ [Scheduler] A sequential sync cycle is already active. Ignoring start request.');
     return;
@@ -6073,6 +6075,7 @@ async function startSequentialSequence(order, staggerSecs, intervalMinutes, topL
     bubbleBase,
     isProduction,
     pausedTables: pausedTables || schedulerState.settings.pausedTables || {},
+    includedTables: includedTables || schedulerState.settings.includedTables || {},
     autoPauseCount
   };
   saveSchedulerState();
@@ -6102,6 +6105,11 @@ async function startSequentialSequence(order, staggerSecs, intervalMinutes, topL
 
         if (schedulerState.settings.pausedTables && schedulerState.settings.pausedTables[id]) {
           console.log(`📅 [Scheduler] Skipping paused table ${id}`);
+          continue;
+        }
+
+        if (schedulerState.settings.includedTables && schedulerState.settings.includedTables[id] === false) {
+          console.log(`📅 [Scheduler] Skipping unchecked table ${id} (per-run inclusion filter)`);
           continue;
         }
 
@@ -6285,7 +6293,7 @@ app.post('/scheduler/start-all', (req, res) => {
   if (isBootLocked())
     return res.json({ success: false, message: 'Boot lock active — please wait 30s after server start' });
 
-  const { order, staggerSecs, intervalMinutes, topLimit, sources, autoPauseCount, pausedTables } = req.body;
+  const { order, staggerSecs, intervalMinutes, topLimit, sources, autoPauseCount, pausedTables, includedTables } = req.body;
   const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
   const isProduction = req.headers['x-environment'] === 'production';
 
@@ -6298,10 +6306,13 @@ app.post('/scheduler/start-all', (req, res) => {
   const autoPauseLimit = parseInt(autoPauseCount) || 3;
 
   console.log(`🟢 [Scheduler API] Starting Sequential Scheduler — Interval: ${mins}min, Stagger: ${stagger}s, TOP: ${top}, Env: ${isProduction ? 'production' : 'development'}, Auto-Pause Threshold: ${autoPauseLimit}`);
+  if (includedTables) {
+    console.log(`📌 [Scheduler API] Per-run inclusion filter:`, JSON.stringify(includedTables));
+  }
 
-  startSequentialSequence(orderedIds, stagger, mins, top, sources, bubbleBase, isProduction, autoPauseLimit, pausedTables);
+  startSequentialSequence(orderedIds, stagger, mins, top, sources, bubbleBase, isProduction, autoPauseLimit, pausedTables, includedTables);
 
-  res.json({ success: true, mode: 'sequential', intervalMinutes: mins, staggerSecs: stagger, topLimit: top, order: orderedIds, autoPauseCount: autoPauseLimit, pausedTables });
+  res.json({ success: true, mode: 'sequential', intervalMinutes: mins, staggerSecs: stagger, topLimit: top, order: orderedIds, autoPauseCount: autoPauseLimit, pausedTables, includedTables });
 });
 
 // ─── /scheduler/pause ────────────────────────────────────────────────────────

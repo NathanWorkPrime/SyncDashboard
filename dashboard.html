@@ -831,7 +831,7 @@
           <table class="proc-list-table">
             <thead><tr>
               <th style="width:24px;"></th>
-              <th style="width:24px;"><input type="checkbox" id="select-all-proc-schedule" onchange="toggleSelectAllSchedule(this)" style="width:14px;height:14px;padding:0;" /></th>
+              <th style="width:24px;"><input type="checkbox" id="select-all-proc-schedule" onchange="toggleSelectAllSchedule(this)" style="width:14px;height:14px;padding:0;" checked /></th>
               <th>Process Name</th>
               <th class="hide-sm">Type</th>
               <th class="hide-sm">Schedule</th>
@@ -2756,7 +2756,7 @@ function buildRowHtml(t, isScheduleTab) {
 
   var cols = trAttrs
     + dragHandleCol
-    + '<td><input type="checkbox" class="proc-checkbox" data-id="' + t.id + '" style="width:14px;height:14px;padding:0;" /></td>'
+    + '<td><input type="checkbox" class="proc-checkbox" data-id="' + t.id + '" style="width:14px;height:14px;padding:0;" checked /></td>'
     + '<td><div class="proc-list-name"><span class="dot ' + statusDot + '"></span>' + orderBadge + t.label + devBadge + '</div><div class="proc-list-sub">' + t.route + '</div></td>'
     + '<td class="hide-sm"><span class="badge badge-purple">Data Sync</span></td>'
     + '<td class="hide-sm">' + (isScheduled ? '<span class="badge badge-green">' + schedLabel + '</span>' : '<span class="badge badge-grey">Manual</span>') + '</td>'
@@ -4845,6 +4845,13 @@ function startAllSchedulers(userInitiated) {
   tables.forEach(function(t) {
     sources[t.id] = tableSourceOverrides[t.id] || settings.syncSource || 'staging';
   });
+
+  // Capture checkbox state for per-run scheduler inclusion
+  var included = {};
+  document.querySelectorAll('#live-processes-tbody-schedule .proc-checkbox').forEach(function(c) {
+    included[c.dataset.id] = c.checked;
+  });
+
   fetch(settings.serverUrl + '/scheduler/start-all', {
     method: 'POST',
     headers: {
@@ -4852,7 +4859,17 @@ function startAllSchedulers(userInitiated) {
       'x-bubble-base-url': settings.bubbleBaseUrl || environments[activeEnv].bubbleBaseUrl || 'https://fidfunddev.site/api/1.1/',
       'x-environment':     activeEnv === 'prod' ? 'production' : 'development'
     },
-    body: JSON.stringify({ mode: 'sequential', order: order, staggerSecs: stagger, intervalMinutes: interval, topLimit: topLimit, sources: sources, autoPauseCount: autoPauseLimit, pausedTables: tablePaused })
+    body: JSON.stringify({ 
+      mode: 'sequential', 
+      order: order, 
+      staggerSecs: stagger, 
+      intervalMinutes: interval, 
+      topLimit: topLimit, 
+      sources: sources, 
+      autoPauseCount: autoPauseLimit, 
+      pausedTables: tablePaused,
+      includedTables: included
+    })
   })
   .then(function(r){ return r.json(); })
   .then(function(d) {
@@ -4864,7 +4881,15 @@ function startAllSchedulers(userInitiated) {
       toast('⚠ Scheduler start failed');
     }
   })
-  .catch(function(err){ toast('✕ Could not reach server: ' + err.message); });
+  .catch(function(err){ toast('✕ Could not reach server: ' + err.message); })
+  .finally(function() {
+    // Reset all checkboxes to checked (one-time filter behavior)
+    document.querySelectorAll('#live-processes-tbody-schedule .proc-checkbox').forEach(function(c) {
+      c.checked = true;
+    });
+    var selectAll = document.getElementById('select-all-proc-schedule');
+    if (selectAll) selectAll.checked = true;
+  });
 }
 
 function stopAllSchedulers() {
