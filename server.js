@@ -4848,7 +4848,7 @@ const RECON_CONFIG = {
     sqlQuery: `SELECT a.Id as sql_key
                FROM dbo.Lic_LicenseApplications a
                INNER JOIN dbo.Core_Periods p ON a.PeriodId = p.Id
-               INNER JOIN dbo.Core_Persons pe ON pe.Id = a.ApplicantId
+               INNER JOIN dbo.Core_Persons pe ON pe.Id = a.ApplicantId AND pe.Frwk_InactiveFlag = 0
                WHERE a.Frwk_InactiveFlag = 0`,
     getSqlKey: r => String(r.sql_key || '').trim().toLowerCase(),
     getBubbleKey: r => {
@@ -6922,9 +6922,9 @@ async function doSyncCertificates(topLimit = 5, trigger = 'manual', bubbleBase =
       throw sqlErr;
     }
 
-    const activeCertOnly = options.activeCertOnly !== false;
-    const activeAppOnly = options.activeAppOnly !== false;
-    const activePersonOnly = options.activePersonOnly !== false;
+    const activeCertOnly = options.activeCertOnly === true;
+    const activeAppOnly = options.activeAppOnly === true;
+    const activePersonOnly = options.activePersonOnly === true;
     const hasAppOnly = options.hasAppOnly !== false;
 
     const topClause = topLimit ? `TOP (${topLimit})` : '';
