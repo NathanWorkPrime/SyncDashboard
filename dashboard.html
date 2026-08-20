@@ -5044,8 +5044,37 @@ function syncSchedulerStatusFromServer() {
       getOrderedTables().forEach(function(t) {
         if (schedulerMasterActive && schedulerCurrentTable === t.id) {
           schedulerTimers[t.id] = true;
+          
+          // Auto-connect to SSE and show panel if not already active
+          var entity = t.id.toLowerCase();
+          if (!window.activeSyncCards || !window.activeSyncCards[entity]) {
+            var topLimit = (d.settings && d.settings.topLimit) || tableTopOverrides[t.id] || settings.topLimit || 5;
+            
+            // Initialize liveSyncData for this entity
+            liveSyncActive = true;
+            liveSyncData = {
+              table: t.label,
+              entity: entity,
+              current: 0,
+              total: topLimit,
+              startTime: Date.now()
+            };
+            
+            showLiveSyncPanel(t.label, topLimit);
+            connectSSE(t.id);
+          }
         } else {
           delete schedulerTimers[t.id];
+          
+          // If this table was running under the scheduler but is no longer the active one,
+          // close/disconnect it after a short delay (3 seconds) to let user see completion status
+          var entity = t.id.toLowerCase();
+          if (sseConnections[t.id] && window.activeSyncCards && window.activeSyncCards[entity] && !t._running) {
+            disconnectSSE(t.id);
+            setTimeout(function() {
+              closeSync(entity);
+            }, 3000);
+          }
         }
       });
 
