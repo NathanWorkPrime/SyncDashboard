@@ -5397,7 +5397,7 @@ async function runSingleTableReconciliation(id, isProduction = false, bubbleBase
 
 app.get('/dashboard/reconciliation-summary', async (req, res) => {
   const bubbleBase = (req.headers['x-bubble-base-url'] && req.headers['x-bubble-base-url'] !== 'undefined') ? req.headers['x-bubble-base-url'] : DEFAULT_BUBBLE_BASE;
-  const isProduction = req.headers['x-environment'] === 'production' || !bubbleBase.includes('/version-test/');
+  const isProduction = req.headers['x-environment'] === 'production';
   const env = isProduction ? 'prod' : 'dev';
   const syncConfigIdsList = getSyncConfigIds(isProduction);
   const creds = getBubbleCredentials(isProduction, bubbleBase);
@@ -6952,6 +6952,8 @@ async function doSyncCertificates(topLimit = 5, trigger = 'manual', bubbleBase =
 
     if (activePersonOnly) {
       joins.push("INNER JOIN Core_Persons AS pe ON pe.Id = l.LicenseHolderPersonId AND pe.Frwk_InactiveFlag = 0");
+    } else {
+      joins.push("LEFT JOIN Core_Persons AS pe ON pe.Id = l.LicenseHolderPersonId");
     }
 
     if (activeCertOnly) {
@@ -6979,7 +6981,9 @@ async function doSyncCertificates(topLimit = 5, trigger = 'manual', bubbleBase =
         l.Aff_IsReissued, l.Aff_IsReinstated, l.Aff_HasApplicationReOpened, l.Aff_Year,
         l.Aff_ExternalId, l.ReasonWithdrawnLkp, l.WithdrawalTypeLkp,
         l.Aff_PractitionerAdmissionLkp, l.Frwk_CreatedTimestamp,
-        l.Frwk_LastUpdatedTimestamp, l.Frwk_InactiveFlag
+        l.Frwk_LastUpdatedTimestamp, l.Frwk_InactiveFlag,
+        a.Id as app_id, a.Frwk_InactiveFlag as app_inactive,
+        pe.Id as person_id, pe.Frwk_InactiveFlag as person_inactive
       FROM Lic_Licenses AS l
       ${joins.join('\n')}
       WHERE ${wheres.join(' AND ')}
@@ -7011,6 +7015,25 @@ async function doSyncCertificates(topLimit = 5, trigger = 'manual', bubbleBase =
       message: `Found ${records.length} records. Syncing to Bubble...`
     });
 
+    const activeBubbleIds = new Set();
+    const cacheFile = '.cache_lpff.certificates.view.' + (isProduction ? 'prod' : 'dev') + '.json';
+    const cachePath = path.join('D:\\Tech-Finity\\Fidelity\\Data Validation\\Count Alignment', cacheFile);
+    if (fs.existsSync(cachePath)) {
+      try {
+        const bubbleRecords = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+        bubbleRecords.forEach(r => {
+          const isInactive = r['Inactive Flag'] === 1 || r['Inactive Flag'] === '1' || r['Inactive Flag'] === true || String(r['Inactive Flag']).toLowerCase() === 'yes';
+          if (!isInactive) {
+            const id = String(r['id'] || r['ID'] || '').trim().toLowerCase();
+            if (id) activeBubbleIds.add(id);
+          }
+        });
+        console.log(`[doSyncCertificates] Loaded ${activeBubbleIds.size} existing active Bubble IDs from cache.`);
+      } catch (err) {
+        console.warn(`[doSyncCertificates] Failed to load Bubble cache: ${err.message}`);
+      }
+    }
+
     let success = 0;
     let errors = 0;
     let latestTimestamp = lastSync;
@@ -7035,6 +7058,21 @@ async function doSyncCertificates(topLimit = 5, trigger = 'manual', bubbleBase =
       }
 
       const record = records[i];
+      const isSqlActive = 
+        record.Frwk_InactiveFlag === 0 &&
+        record.app_id !== null &&
+        record.app_inactive === 0 &&
+        record.person_id !== null &&
+        record.person_inactive === 0;
+
+      if (!isSqlActive) {
+        const lowerId = String(record.Id || '').trim().toLowerCase();
+        if (!activeBubbleIds.has(lowerId)) {
+          latestTimestamp = record.Frwk_LastUpdatedTimestamp ? record.Frwk_LastUpdatedTimestamp.toISOString() : latestTimestamp;
+          continue;
+        }
+      }
+
       try {
         const payload = {
           id: record.Id,
@@ -7060,7 +7098,7 @@ async function doSyncCertificates(topLimit = 5, trigger = 'manual', bubbleBase =
           Aff_PractitionerAdmissionLkp: record.Aff_PractitionerAdmissionLkp != null ? String(record.Aff_PractitionerAdmissionLkp) : null,
           Frwk_CreatedTimestamp: record.Frwk_CreatedTimestamp?.toISOString() || null,
           Frwk_LastUpdatedTimestamp: record.Frwk_LastUpdatedTimestamp?.toISOString() || null,
-          Frwk_InactiveFlag: record.Frwk_InactiveFlag ? "yes" : "no"
+          Frwk_InactiveFlag: isSqlActive ? false : true
         };
 
         const fullUrl = bubbleBase + 'wf/sync-certificates';

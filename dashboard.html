@@ -2033,7 +2033,7 @@ var TABLES = [
 ];
 
 var settings             = { serverUrl: 'http://102.130.122.57:3000', bubbleToken: '', topLimit: 5, interval: 15, autoPauseCount: 3, scheduleMode: 'sequential', staggerSecs: 30, syncSource: 'staging' };
-var environments         = { dev: { label: 'Development', serverUrl: 'http://102.130.122.57:3000', bubbleBaseUrl: 'https://fidfunddev.site/api/1.1/', bubbleToken: '' }, prod: { label: 'Production', serverUrl: 'http://102.130.122.57:3000', bubbleBaseUrl: 'https://fidfunddev.site/api/1.1/', bubbleToken: '' } };
+var environments         = { dev: { label: 'Development', serverUrl: 'http://102.130.122.57:3000', bubbleBaseUrl: 'https://fidfunddev.site/version-test/api/1.1/', bubbleToken: '' }, prod: { label: 'Production', serverUrl: 'http://102.130.122.57:3000', bubbleBaseUrl: 'https://fidfunddev.site/api/1.1/', bubbleToken: '' } };
 var schedulerTimers      = {};
 var schedulerMasterActive = false;
 var schedulerCurrentTable = null;
@@ -5177,7 +5177,18 @@ function saveSettings() {
 
 function loadEnvironments() {
   var saved = localStorage.getItem('environments');
-  if (saved) environments = JSON.parse(saved);
+  if (saved) {
+    try {
+      environments = JSON.parse(saved);
+    } catch (e) {
+      console.error('Error parsing environments from localStorage:', e);
+    }
+  }
+  // Auto-correction: ensure the dev environment uses the correct version-test URL
+  if (environments.dev && (!environments.dev.bubbleBaseUrl || !environments.dev.bubbleBaseUrl.includes('/version-test/'))) {
+    environments.dev.bubbleBaseUrl = 'https://fidfunddev.site/version-test/api/1.1/';
+    localStorage.setItem('environments', JSON.stringify(environments));
+  }
   var ae = localStorage.getItem('activeEnv');
   if (ae) activeEnv = ae;
 
@@ -6868,7 +6879,7 @@ async function triggerReconciliation() {
       method: 'POST',
       headers: {
         'x-environment': activeEnv === 'prod' ? 'production' : 'development',
-        'x-bubble-base-url': settings.bubbleUrl
+        'x-bubble-base-url': settings.bubbleBaseUrl
       }
     });
     const data = await res.json();
