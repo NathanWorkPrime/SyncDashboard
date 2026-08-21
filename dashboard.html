@@ -4343,6 +4343,48 @@ function handleSSEProgress(tableId, data) {
   updateLiveSyncProgress(cardData.current, message, data.isLatest || false);
 }
 
+function getUpNextQueue(currentTableId) {
+  var ordered = getOrderedTables();
+  var currentIndex = -1;
+  for (var i = 0; i < ordered.length; i++) {
+    if (ordered[i].id === currentTableId) {
+      currentIndex = i;
+      break;
+    }
+  }
+  var remaining = ordered.slice(currentIndex + 1);
+  return remaining.filter(function(t) {
+    return isTableIncluded(t.id) && !tablePaused[t.id];
+  });
+}
+
+function updateQueueDisplay(entity, currentTableId) {
+  var queueId = 'sync-card-' + entity + '-queue';
+  var listId = 'sync-card-' + entity + '-queue-list';
+  var queueEl = document.getElementById(queueId);
+  var listEl = document.getElementById(listId);
+  if (!queueEl || !listEl) return;
+  
+  if (!schedulerMasterActive) {
+    queueEl.style.display = 'none';
+    return;
+  }
+  
+  var queue = getUpNextQueue(currentTableId);
+  if (queue.length === 0) {
+    listEl.innerHTML = '<span style="color:var(--text-muted);font-style:italic;">None (last table in cycle)</span>';
+  } else {
+    listEl.innerHTML = queue.map(function(t, idx) {
+      var pill = '<span class="badge badge-grey" style="font-size:9px;padding:2px 5px;font-weight:600;background:var(--surface-2);color:var(--text-sub);border:1px solid var(--border);margin-bottom:2px;">' + t.label + '</span>';
+      if (idx < queue.length - 1) {
+        pill += '<span style="color:var(--text-muted);font-size:10px;margin:0 2px;">&rarr;</span>';
+      }
+      return pill;
+    }).join('');
+  }
+  queueEl.style.display = 'flex';
+}
+
 // ── LIVE SYNC PROGRESS PANEL (Multi-Card Accordion) ──
 function showLiveSyncPanel(tableName, total) {
   console.log('[showLiveSyncPanel] Called with:', tableName, total);
@@ -4402,6 +4444,10 @@ function showLiveSyncPanel(tableName, total) {
         <div style="width:100%;height:8px;background:var(--border);border-radius:20px;overflow:hidden;">
           <div id="${cardId}-bar" style="width:0%;height:100%;background:linear-gradient(90deg,var(--purple),#a29bfe);transition:width 0.3s;border-radius:20px;"></div>
         </div>
+        <div id="${cardId}-queue" style="margin-top:12px;font-size:11px;color:var(--text-muted);display:none;align-items:center;gap:6px;background:var(--surface-1);padding:6px 10px;border-radius:6px;border:1px solid var(--border);">
+          <span style="font-weight:700;color:var(--purple);white-space:nowrap;">Up Next:</span>
+          <span id="${cardId}-queue-list" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;"></span>
+        </div>
         <div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:var(--text-sub);flex-wrap:wrap;">
           <div><strong id="${cardId}-speed">—</strong> rec/sec</div>
           <div><strong id="${cardId}-eta">—</strong> remaining</div>
@@ -4417,6 +4463,7 @@ function showLiveSyncPanel(tableName, total) {
   
   accordion.appendChild(card);
   console.log('[showLiveSyncPanel] ✓ Card created for', entity);
+  updateQueueDisplay(entity, entity);
   
   // Start elapsed timer
   window.activeSyncCards[entity]._elapsedTimer = setInterval(function() {
@@ -5083,6 +5130,7 @@ function syncSchedulerStatusFromServer() {
             showLiveSyncPanel(t.label, topLimit);
             connectSSE(t.id);
           }
+          updateQueueDisplay(entity, t.id);
         } else {
           delete schedulerTimers[t.id];
           
