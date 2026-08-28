@@ -3972,6 +3972,7 @@ async function doSyncProductionAudits(topLimit = 5, trigger = 'manual', bubbleBa
 // ─── ROUTES ──────────────────────────────────────────────────────────────────
 // ═════════════════════════════════════════════════════════════════════════════
 
+/*
 app.get("/users", async (req, res) => {
   let pool;
   try {
@@ -4020,6 +4021,7 @@ app.post("/sync-users", async (req, res) => {
   } finally {
   }
 });
+*/
 
 app.get("/firms", async (req, res) => {
   let pool;
