@@ -547,10 +547,8 @@ const RATE_LIMIT_CONFIG = {
 };
 
 async function applyRateLimit(entityName, recordIndex) {
-  if (recordIndex > 1 && recordIndex % 10 === 0) {
-    const delayMs = RATE_LIMIT_CONFIG[entityName] || 100;
-    await new Promise(resolve => setTimeout(resolve, delayMs));
-  }
+  const delayMs = RATE_LIMIT_CONFIG[entityName] || 100;
+  await new Promise(resolve => setTimeout(resolve, delayMs));
 }
 
 // ─── NEW: Calculate global minimum watermark across all processed rows ───────
@@ -814,17 +812,17 @@ async function doSyncFirms(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
             ls_firm_number: firm.LSFirmNumber !== null ? String(firm.LSFirmNumber) : null,
             province: CIRCLE_MAP[firm.Circle] ?? null,
             status: firm.ActiveFlag,
-            red_flag: firm.RedFlag === "Y" ? "yes" : "no",
+            red_flag: toYesNo(firm.RedFlag),
             inactive_flag: firm.InactiveFlag === "Y" ? true : false,
             inactive_reason: firm.InactiveReason,
-            inactivated_timestamp: firm.InactivatedTimestamp,
+            inactivated_timestamp: toBubbleDate(firm.InactivatedTimestamp),
             main_branch: firm.MainBranch !== null ? Number(firm.MainBranch) : null,
             main_branch_firm_id: firm.MainBranchFirmId !== null ? String(firm.MainBranchFirmId) : null,
-            date_formed: firm.DateFormed,
-            firm_closure_date: firm.FirmClosureDate,
+            date_formed: toBubbleDate(firm.DateFormed),
+            firm_closure_date: toBubbleDate(firm.FirmClosureDate),
             firm_closure_reason: firm.FirmClosureReason,
             firm_closure_comments: firm.FirmClosureComments,
-            is_latest_row: isLatestRow ? "yes" : "no",
+            is_latest_row: toYesNo(isLatestRow),
           };
 
           const wr = await fetchWithRetry(bubbleBase + 'wf/get_firms', {
@@ -1015,6 +1013,7 @@ async function doSyncProductionFirms(topLimit = 5, trigger = 'manual', bubbleBas
             Frwk_InactivatedTimestamp as InactivatedTimestamp,
             Aff_FinancialYearEnd as FinancialYearEnd,
             Aff_StatusLkp as Status,
+            Aff_FirmAccountingStatusLkp as FirmAccountingStatus,
             ISNULL(Frwk_LastUpdatedTimestamp, Frwk_CreatedTimestamp) as LastSyncTime
         FROM dbo.Core_Organisations
         WHERE Frwk_Discriminator = 'Aff.Firm' AND Aff_FirmNo IN (${list})
@@ -1044,6 +1043,7 @@ async function doSyncProductionFirms(topLimit = 5, trigger = 'manual', bubbleBas
             Frwk_InactivatedTimestamp as InactivatedTimestamp,
             Aff_FinancialYearEnd as FinancialYearEnd,
             Aff_StatusLkp as Status,
+            Aff_FirmAccountingStatusLkp as FirmAccountingStatus,
             ISNULL(Frwk_LastUpdatedTimestamp, Frwk_CreatedTimestamp) as LastSyncTime
         FROM dbo.Core_Organisations
         WHERE Frwk_Discriminator = 'Aff.Firm'
@@ -1103,7 +1103,7 @@ async function doSyncProductionFirms(topLimit = 5, trigger = 'manual', bubbleBas
           firm_name_caps: rec.FirmNameCaps || null,
           firm_type: null,
           discriminator: rec.Discriminator || null,
-          id: rec.ID !== null ? String(rec.ID) : null,
+          id: rec.ID !== null ? Number(rec.ID) : null,
           email_1: rec.Email1 || null,
           fax_number: rec.FaxNumber || null,
           mobile_number_1: rec.MobileNumber1 || null,
@@ -1112,24 +1112,24 @@ async function doSyncProductionFirms(topLimit = 5, trigger = 'manual', bubbleBas
           audited_separately: rec.AuditedSeparately !== null ? String(rec.AuditedSeparately) : "0",
           auditor_id: "0",
           financial_year_end: rec.FinancialYearEnd || null,
-          firm_accounting_status: null,
+          firm_accounting_status: rec.FirmAccountingStatus !== null ? (String(rec.FirmAccountingStatus) === '21' ? 'LOCALACCOUNTING' : (String(rec.FirmAccountingStatus) === '22' ? 'LOCALNONACCOUNTING' : null)) : null,
           senior_partner_director: "0",
           docex_number: null,
           ffc_firm_number: rec.FFCFirmNumber !== null ? String(rec.FFCFirmNumber) : null,
           ls_firm_number: rec.LSFirmNumber !== null ? String(rec.LSFirmNumber) : null,
           province: null,
-          status: rec.InactiveFlag === true ? "no" : "yes",
-          red_flag: "no",
+          status: toYesNo(!rec.InactiveFlag),
+          red_flag: toYesNo(false),
           inactive_flag: rec.InactiveFlag === true ? true : false,
           inactive_reason: rec.InactiveReason || null,
-          inactivated_timestamp: rec.InactivatedTimestamp ? rec.InactivatedTimestamp.toISOString() : null,
+          inactivated_timestamp: toBubbleDate(rec.InactivatedTimestamp),
           main_branch: rec.MainBranch !== null ? Number(rec.MainBranch) : null,
           main_branch_firm_id: rec.MainBranchFirmId || null,
-          date_formed: rec.DateFormed ? rec.DateFormed.toISOString() : null,
-          firm_closure_date: rec.InactivatedTimestamp ? rec.InactivatedTimestamp.toISOString() : null,
+          date_formed: toBubbleDate(rec.DateFormed),
+          firm_closure_date: toBubbleDate(rec.InactivatedTimestamp),
           firm_closure_reason: rec.InactiveReason || null,
           firm_closure_comments: null,
-          is_latest_row: "yes",
+          is_latest_row: toYesNo(true),
         };
 
         const wr = await fetchWithRetry(bubbleBase + 'wf/get_firms', {
@@ -1378,11 +1378,11 @@ async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
             trust_account_type: bank.TrustBanlAcc !== null ? String(bank.TrustBanlAcc) : null,
             amts: bank.AMTS === "1" ? true : false,
             discriminator: bank.Discriminator !== null ? String(bank.Discriminator) : null,
-            date_opened: bank.Daterec || null,
-            last_updated: bank.DateUpd || null,
-            created_timestamp: bank.DateStamp || null,
-            inactive_flag: bank.acv_ind === true ? "no" : "yes",
-            transaction_date: bank.trn_dte || null,
+            date_opened: toBubbleDate(bank.Daterec),
+            last_updated: toBubbleDate(bank.DateUpd),
+            created_timestamp: toBubbleDate(bank.DateStamp),
+            inactive_flag: bank.acv_ind !== true,
+            transaction_date: toBubbleDate(bank.trn_dte),
             external_id: bank.ExternalID || null,
           };
           const wr = await fetchWithRetry(bubbleBase + 'wf/get_banks', {
@@ -1671,11 +1671,11 @@ async function doSyncProductionBanks(topLimit = 5, trigger = 'manual', bubbleBas
           trust_account_type: rec.AccountTypeLkp !== null ? String(rec.AccountTypeLkp) : null,
           amts: false,
           discriminator: null,
-          date_opened: rec.Daterec || null,
-          last_updated: rec.trn_dte || null,
-          created_timestamp: rec.Daterec || null,
-          inactive_flag: rec.InactiveFlag === 2 ? "yes" : "no",
-          transaction_date: rec.trn_dte ? rec.trn_dte.toISOString() : null,
+          date_opened: toBubbleDate(rec.Daterec),
+          last_updated: toBubbleDate(rec.trn_dte),
+          created_timestamp: toBubbleDate(rec.Daterec),
+          inactive_flag: rec.InactiveFlag === 2,
+          transaction_date: toBubbleDate(rec.trn_dte),
           external_id: rec.Id !== null ? String(rec.Id) : null,
         };
 
@@ -1943,7 +1943,7 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
             initials: p.Initials || null,
             title: p.Title || null,
             gender: p.Gender || null,
-            date_of_birth: p.DateOfBirth || null,
+            date_of_birth: toBubbleDate(p.DateOfBirth),
             cell_number: p.CellNumber || null,
             fax_number: p.FaxNumber || null,
             email: p.Email || null,
@@ -1951,17 +1951,17 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
             discriminator: p.Discriminator || null,
             pmt_status: p.PmtStatus !== null ? String(p.PmtStatus) : null,
             province: p.Province || null,
-            red_flag: p.RedFlag || null,
-            attorney: p.Attorney !== null ? String(p.Attorney) : null,
-            attorney_date: p.AttorneyDate || null,
-            notary: p.Notary !== null ? String(p.Notary) : null,
-            notary_date: p.NotaryDate || null,
-            conveyancer: p.Conveyancer !== null ? String(p.Conveyancer) : null,
-            conveyancer_date: p.ConveyancerDate || null,
-            course_completed_date: p.CourseCompletedDate || null,
-            course_proof_date: p.CourseProofDate || null,
-            date_inactive: p.DateInactive || null,
-            inactive_flag: p.InactiveFlag === true ? "no" : "yes",
+            red_flag: toYesNo(p.RedFlag),
+            attorney: toYesNo(p.Attorney),
+            attorney_date: toBubbleDate(p.AttorneyDate),
+            notary: toYesNo(p.Notary),
+            notary_date: toBubbleDate(p.NotaryDate),
+            conveyancer: toYesNo(p.Conveyancer),
+            conveyancer_date: toBubbleDate(p.ConveyancerDate),
+            course_completed_date: toBubbleDate(p.CourseCompletedDate),
+            course_proof_date: toBubbleDate(p.CourseProofDate),
+            date_inactive: toBubbleDate(p.DateInactive),
+            inactive_flag: toYesNo(p.InactiveFlag === true),
             physical_address: p.PhysicalAddress || null,
             postal_address: p.PostalAddress || null,
             username: p.Username || null,
@@ -1969,8 +1969,8 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
             advocate: null,
             advocate_date: null,
             ffc_advocate: null,
-            transaction_date: p.TransactionDate || null,
-            is_latest_row: isLatestRow ? "yes" : "no",
+            transaction_date: toBubbleDate(p.TransactionDate),
+            is_latest_row: toYesNo(isLatestRow),
           };
           const wr = await fetchWithRetry(bubbleBase + 'wf/get_practitioners', {
             method: "POST",
@@ -2281,34 +2281,34 @@ async function doSyncProductionPractitioners(topLimit = 5, trigger = 'manual', b
           initials: rec.Initials || null,
           title: rec.Title !== null ? String(rec.Title) : null,
           gender: rec.Gender !== null ? String(rec.Gender) : null,
-          date_of_birth: rec.DateOfBirth ? (rec.DateOfBirth.toISOString ? rec.DateOfBirth.toISOString() : rec.DateOfBirth) : null,
+          date_of_birth: toBubbleDate(rec.DateOfBirth),
           cell_number: rec.CellNumber || null,
           fax_number: rec.FaxNumber || null,
           email: rec.Email || null,
           id_number: rec.IDNumber || null,
           discriminator: rec.Discriminator || null,
-          inactive_flag: rec.InactiveFlag === true || rec.InactiveFlag === 1 ? "yes" : "no",
-          transaction_date: rec.TransactionDate ? (rec.TransactionDate.toISOString ? rec.TransactionDate.toISOString() : rec.TransactionDate) : null,
+          inactive_flag: toYesNo(rec.InactiveFlag === true || rec.InactiveFlag === 1),
+          transaction_date: toBubbleDate(rec.TransactionDate),
           username: rec.MemNo !== null ? String(rec.MemNo) : null,
           pmt_status: rec.PMTStatus !== null && rec.PMTStatus !== undefined ? String(rec.PMTStatus) : null,
           province: rec.ProvinceLkp !== null && rec.ProvinceLkp !== undefined ? String(rec.ProvinceLkp) : null,
-          red_flag: rec.RedFlag !== null && rec.RedFlag !== undefined ? String(rec.RedFlag) : null,
-          attorney: rec.Attorney !== null && rec.Attorney !== undefined ? (normalizeBoolean(rec.Attorney) ? "yes" : "no") : null,
-          attorney_date: rec.AttorneyDate ? (rec.AttorneyDate.toISOString ? rec.AttorneyDate.toISOString() : rec.AttorneyDate) : null,
-          notary: rec.Notary !== null && rec.Notary !== undefined ? (normalizeBoolean(rec.Notary) ? "yes" : "no") : null,
-          notary_date: rec.NotaryDate ? (rec.NotaryDate.toISOString ? rec.NotaryDate.toISOString() : rec.NotaryDate) : null,
-          conveyancer: rec.Conveyancer !== null && rec.Conveyancer !== undefined ? (normalizeBoolean(rec.Conveyancer) ? "yes" : "no") : null,
-          conveyancer_date: rec.ConveyancerDate ? (rec.ConveyancerDate.toISOString ? rec.ConveyancerDate.toISOString() : rec.ConveyancerDate) : null,
-          course_completed_date: rec.CourseCompletedDate ? (rec.CourseCompletedDate.toISOString ? rec.CourseCompletedDate.toISOString() : rec.CourseCompletedDate) : null,
-          course_proof_date: rec.CourseProofDate ? (rec.CourseProofDate.toISOString ? rec.CourseProofDate.toISOString() : rec.CourseProofDate) : null,
-          date_inactive: rec.DateInactive ? (rec.DateInactive.toISOString ? rec.DateInactive.toISOString() : rec.DateInactive) : null,
+          red_flag: toYesNo(rec.RedFlag),
+          attorney: toYesNo(normalizeBoolean(rec.Attorney)),
+          attorney_date: toBubbleDate(rec.AttorneyDate),
+          notary: toYesNo(normalizeBoolean(rec.Notary)),
+          notary_date: toBubbleDate(rec.NotaryDate),
+          conveyancer: toYesNo(normalizeBoolean(rec.Conveyancer)),
+          conveyancer_date: toBubbleDate(rec.ConveyancerDate),
+          course_completed_date: toBubbleDate(rec.CourseCompletedDate),
+          course_proof_date: toBubbleDate(rec.CourseProofDate),
+          date_inactive: toBubbleDate(rec.DateInactive),
           physical_address: null,
           postal_address: null,
           role: rec.Activity !== null && rec.Activity !== undefined ? String(rec.Activity) : null,
-          advocate: rec.Advocate !== null && rec.Advocate !== undefined ? (normalizeBoolean(rec.Advocate) ? "yes" : "no") : null,
-          advocate_date: rec.AdvocateDate ? (rec.AdvocateDate.toISOString ? rec.AdvocateDate.toISOString() : rec.AdvocateDate) : null,
+          advocate: toYesNo(normalizeBoolean(rec.Advocate)),
+          advocate_date: toBubbleDate(rec.AdvocateDate),
           ffc_advocate: null,
-          is_latest_row: "yes",
+          is_latest_row: toYesNo(true),
         };
 
         const wr = await fetchWithRetry(bubbleBase + 'wf/get_practitioners', {
@@ -2540,14 +2540,14 @@ async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBa
         try {
           const payload = {
             practitioner_number: rec.memno !== null ? String(rec.memno) : null,
-            attorney: rec.attorney !== null ? String(rec.attorney) : null,
-            attorney_date: rec.attorney_dte || null,
-            conveyancer: rec.conveyancer !== null ? String(rec.conveyancer) : null,
-            conveyancer_date: rec.conveyancer_dte || null,
-            notary: rec.notary !== null ? String(rec.notary) : null,
-            notary_date: rec.notary_dte || null,
-            advocate: rec.advocate !== null ? String(rec.advocate) : null,
-            advocate_date: rec.advocate_dte || null,
+            attorney: toYesNo(normalizeBoolean(rec.attorney)),
+            attorney_date: toBubbleDate(rec.attorney_dte),
+            conveyancer: toYesNo(normalizeBoolean(rec.conveyancer)),
+            conveyancer_date: toBubbleDate(rec.conveyancer_dte),
+            notary: toYesNo(normalizeBoolean(rec.notary)),
+            notary_date: toBubbleDate(rec.notary_dte),
+            advocate: toYesNo(normalizeBoolean(rec.advocate)),
+            advocate_date: toBubbleDate(rec.advocate_dte),
             ffc_advocate: rec.ffc_advocate !== null ? String(rec.ffc_advocate) : null,
           };
           const wr = await fetchWithRetry(bubbleBase + 'wf/get_practitionersadm', {
@@ -2812,17 +2812,17 @@ async function doSyncProductionPractitionersAdm(topLimit = 5, trigger = 'manual'
 
       try {
         const payload = {
-          attorney: rec.attorney !== null && rec.attorney !== undefined ? (normalizeBoolean(rec.attorney) ? "yes" : "no") : null,
-          attorney_date: rec.attorney_dte ? rec.attorney_dte.toISOString() : null,
-          conveyancer: rec.conveyancer !== null && rec.conveyancer !== undefined ? (normalizeBoolean(rec.conveyancer) ? "yes" : "no") : null,
-          conveyancer_date: rec.conveyancer_dte ? rec.conveyancer_dte.toISOString() : null,
-          notary: rec.notary !== null && rec.notary !== undefined ? (normalizeBoolean(rec.notary) ? "yes" : "no") : null,
-          notary_date: rec.notary_dte ? rec.notary_dte.toISOString() : null,
-          advocate: rec.advocate !== null && rec.advocate !== undefined ? (normalizeBoolean(rec.advocate) ? "yes" : "no") : null,
-          advocate_date: rec.advocate_dte ? rec.advocate_dte.toISOString() : null,
+          attorney: toYesNo(normalizeBoolean(rec.attorney)),
+          attorney_date: toBubbleDate(rec.attorney_dte),
+          conveyancer: toYesNo(normalizeBoolean(rec.conveyancer)),
+          conveyancer_date: toBubbleDate(rec.conveyancer_dte),
+          notary: toYesNo(normalizeBoolean(rec.notary)),
+          notary_date: toBubbleDate(rec.notary_dte),
+          advocate: toYesNo(normalizeBoolean(rec.advocate)),
+          advocate_date: toBubbleDate(rec.advocate_dte),
           ffc_advocate: rec.ffc_advocate !== null ? String(rec.ffc_advocate) : null,
           practitioner_number: rec.memno !== null ? String(rec.memno) : null,
-          transaction_date: rec.trn_dte ? rec.trn_dte.toISOString() : null,
+          transaction_date: toBubbleDate(rec.trn_dte),
         };
 
         const wr = await fetchWithRetry(bubbleBase + 'wf/get_practitionersadm', {
@@ -3088,12 +3088,12 @@ async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleB
             practitioner_number: rec.memno !== null ? String(rec.memno) : null,
             firm_number: rec.firmno !== null ? String(rec.firmno) : null,
             status: rec.status !== null ? (ROLE_MAP[String(rec.status)] || String(rec.status)) : null,
-            start_date: rec.StartDate || null,
+            start_date: toBubbleDate(rec.StartDate),
             end_date: rec.EndDate || null,
             discriminator: rec.Discriminator || null,
             inactive_flag: rec.InactiveFlag !== null ? String(rec.InactiveFlag) : null,
             external_id: rec.ExternalID || null,
-            last_updated: rec.LastUpdated || null,
+            last_updated: toBubbleDate(rec.LastUpdated),
           };
           const wr = await fetchWithRetry(bubbleBase + 'wf/get_employmenthistory', {
             method: 'POST',
@@ -3350,12 +3350,12 @@ async function doSyncProductionEmploymentHistory(topLimit = 5, trigger = 'manual
           practitioner_number: rec.memno !== null ? String(rec.memno) : null,
           firm_number: rec.firmno !== null ? String(rec.firmno) : null,
           status: rec.role_lkp !== null ? (ROLE_MAP[String(rec.role_lkp)] || rec.role_desc || null) : null,
-          start_date: rec.start_date ? rec.start_date.toISOString() : null,
+          start_date: toBubbleDate(rec.start_date),
           end_date: rec.end_date ? rec.end_date.toISOString() : null,
           discriminator: rec.discriminator || null,
           inactive_flag: rec.inactive !== null ? !!rec.inactive : false,
           external_id: rec.external_id || rec.id,
-          last_updated: rec.last_updated ? rec.last_updated.toISOString() : null,
+          last_updated: toBubbleDate(rec.last_updated),
         };
 
         const wr = await fetchWithRetry(bubbleBase + 'wf/get_employmenthistory', {
@@ -3604,16 +3604,16 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
           const payload = {
             id: rec.ID !== null ? String(rec.ID) : null,
             firm_no: rec.FIRMNO !== null ? String(rec.FIRMNO) : null,
-            due_date: rec.AudDueDate || null,
-            received_date: rec.Received || null,
-            qualified: rec.Qualified || null,
+            due_date: toBubbleDate(rec.AudDueDate),
+            received_date: toBubbleDate(rec.Received),
+            qualified: toYesNo(rec.Qualified),
             year: rec.Year !== null ? String(rec.Year) : null,
             audit_type: rec.AuditType !== null ? String(rec.AuditType) : null,
-            approved: rec.AuditApproved !== null ? String(rec.AuditApproved) : null,
-            approved_date: rec.DateAuditApproved || null,
+            approved: toYesNo(rec.AuditApproved),
+            approved_date: toBubbleDate(rec.DateAuditApproved),
             approved_by: rec.UserAuditApproved || null,
-            financial_year_start: rec.PeriodStartDate || null,
-            financial_year_end: rec.PeriodEnddate || null,
+            financial_year_start: toBubbleDate(rec.PeriodStartDate),
+            financial_year_end: toBubbleDate(rec.PeriodEnddate),
             audit_report_number: rec.Reportno || null,
             audit_fees_amount: rec.ChargeAmt !== null ? Number(rec.ChargeAmt) : null,
             actual_audit_fees: rec.ActualAuditCosts !== null ? Number(rec.ActualAuditCosts) : null,
@@ -3622,8 +3622,8 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
             bank_charge_amount: rec.BankCharge_63 !== null ? Number(rec.BankCharge_63) : null,
             auditor: rec.AuditorID !== null ? String(rec.AuditorID) : null,
             discriminator: rec.Discriminator || null,
-            inactive_flag: rec.InactiveFlag !== null ? String(rec.InactiveFlag) : null,
-            last_updated: rec.LastUpdated || null,
+            inactive_flag: toYesNo(rec.InactiveFlag),
+            last_updated: toBubbleDate(rec.LastUpdated),
             audit_compliance_status: rec.AuditComplianceStatus || null,
           };
           const wr = await fetchWithRetry(bubbleBase + 'wf/get_audits', {
@@ -3799,13 +3799,17 @@ async function doSyncProductionAudits(topLimit = 5, trigger = 'manual', bubbleBa
       const query = `
         SELECT 
             Id as ID,
-            FirmNumber as FIRMNO,
-            AppointedAuditor as AppointedAuditor,
-            AuditorRegistrationNo as AuditorID,
+            FirmNo as FIRMNO,
+            IsQualified as Qualified,
+            Year as Year,
+            AuditTypeLkp as AuditType,
+            IsAprroved as Approved,
+            AuditorId as AuditorID,
             Frwk_InactiveFlag as InactiveFlag,
-            SubmittedDate as SubmittedDate,
+            DueDate as DueDate,
+            ReceivedDate as ReceivedDate,
             ISNULL(Frwk_LastUpdatedTimestamp, Frwk_CreatedTimestamp) as LastUpdated
-        FROM dbo.Aff_FfcFirmQuestionnaires
+        FROM dbo.Aff_FirmFinancialYears
         WHERE Id IN (${list})
       `;
       const res = await step1.query(query);
@@ -3817,13 +3821,17 @@ async function doSyncProductionAudits(topLimit = 5, trigger = 'manual', bubbleBa
       const query = `
         SELECT TOP (@topLimit)
             Id as ID,
-            FirmNumber as FIRMNO,
-            AppointedAuditor as AppointedAuditor,
-            AuditorRegistrationNo as AuditorID,
+            FirmNo as FIRMNO,
+            IsQualified as Qualified,
+            Year as Year,
+            AuditTypeLkp as AuditType,
+            IsAprroved as Approved,
+            AuditorId as AuditorID,
             Frwk_InactiveFlag as InactiveFlag,
-            SubmittedDate as SubmittedDate,
+            DueDate as DueDate,
+            ReceivedDate as ReceivedDate,
             ISNULL(Frwk_LastUpdatedTimestamp, Frwk_CreatedTimestamp) as LastUpdated
-        FROM dbo.Aff_FfcFirmQuestionnaires
+        FROM dbo.Aff_FirmFinancialYears
         WHERE (Frwk_LastUpdatedTimestamp > @lastSyncTime OR Frwk_CreatedTimestamp > @lastSyncTime)
         ORDER BY ISNULL(Frwk_LastUpdatedTimestamp, Frwk_CreatedTimestamp) ASC
       `;
@@ -3873,14 +3881,27 @@ async function doSyncProductionAudits(topLimit = 5, trigger = 'manual', bubbleBa
         const payload = {
           id: rec.ID !== null ? String(rec.ID) : null,
           firm_no: rec.FIRMNO !== null ? String(rec.FIRMNO) : null,
-          qualified: null,
-          year: null,
-          audit_type: null,
-          approved: null,
-          auditor_registration_no: rec.AuditorID || null,
-          inactive_flag: rec.InactiveFlag === true || rec.InactiveFlag === 1 ? "true" : "false",
-          last_updated: rec.LastUpdated ? rec.LastUpdated.toISOString() : null,
-          external_id: rec.ID !== null ? String(rec.ID) : null,
+          due_date: toBubbleDate(rec.DueDate),
+          received_date: toBubbleDate(rec.ReceivedDate),
+          qualified: toYesNo(rec.Qualified),
+          year: rec.Year !== null ? String(rec.Year) : null,
+          audit_type: rec.AuditType !== null ? String(rec.AuditType) : null,
+          approved: toYesNo(rec.Approved),
+          approved_date: toBubbleDate(null),
+          approved_by: null,
+          financial_year_start: toBubbleDate(null),
+          financial_year_end: toBubbleDate(null),
+          audit_report_number: null,
+          audit_fees_amount: 0,
+          actual_audit_fees: 0,
+          gross_interest_amount: 0,
+          net_interest_amount: 0,
+          bank_charge_amount: 0,
+          auditor: rec.AuditorID !== null ? String(rec.AuditorID) : null,
+          discriminator: "Aff.FirmFY",
+          inactive_flag: toYesNo(rec.InactiveFlag),
+          last_updated: toBubbleDate(rec.LastUpdated),
+          audit_compliance_status: null
         };
 
         const wr = await fetchWithRetry(bubbleBase + 'wf/get_audits', {
@@ -3891,7 +3912,7 @@ async function doSyncProductionAudits(topLimit = 5, trigger = 'manual', bubbleBa
 
         if (wr.ok) {
           if (ENABLE_DEV_RUN_WRITEBACK) {
-            await writeBackDevRun(pool, 'dbo.Aff_FfcFirmQuestionnaires', 'Id', rec.ID);
+            await writeBackDevRun(pool, 'dbo.Aff_FirmFinancialYears', 'Id', rec.ID);
           }
           success++;
           if (!customIds || customIds.length === 0) {
@@ -3905,6 +3926,8 @@ async function doSyncProductionAudits(topLimit = 5, trigger = 'manual', bubbleBa
         } else {
           errors++;
           failedIds.push(rec.ID);
+          const errBody = await wr.text();
+          console.error(`❌ [Audits:${rec.ID}] Bubble returned error (HTTP ${wr.status}): ${errBody}`);
         }
       } catch (err) {
         errors++;
@@ -4029,6 +4052,7 @@ app.get("/firms", async (req, res) => {
 });
 
 app.post("/sync-firms", async (req, res) => {
+  if (checkSchedulerLock(res)) return;
   console.log(`[sync-firms] raw body:`, JSON.stringify(req.body));
   console.log(`[sync-firms] topLimit raw:`, req.body?.topLimit, typeof req.body?.topLimit);
   const topLimit = parseInt(req.body?.topLimit) || 5;
@@ -4069,6 +4093,7 @@ app.get("/banks", async (req, res) => {
 });
 
 app.post("/sync-banks", async (req, res) => {
+  if (checkSchedulerLock(res)) return;
   const topLimit = parseInt(req.body?.topLimit) || 5;
   const trigger = req.body?.trigger || 'manual';
   const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
@@ -4114,6 +4139,7 @@ app.get("/practitioners", async (req, res) => {
 });
 
 app.post("/sync-practitioners", async (req, res) => {
+  if (checkSchedulerLock(res)) return;
   const topLimit = parseInt(req.body?.topLimit) || 5;
   const trigger = req.body?.trigger || 'manual';
   const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
@@ -4139,6 +4165,7 @@ app.post("/sync-practitioners", async (req, res) => {
 });
 
 app.post("/sync-practitioners-adm", async (req, res) => {
+  if (checkSchedulerLock(res)) return;
   const topLimit = parseInt(req.body?.topLimit) || 5;
   const trigger = req.body?.trigger || 'manual';
   const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
@@ -4158,6 +4185,7 @@ app.post("/sync-practitioners-adm", async (req, res) => {
 
 // Alias route for dashboard manual push compatibility
 app.post('/sync-practitionersadm', async (req, res) => {
+  if (checkSchedulerLock(res)) return;
   const topLimit = parseInt(req.body?.topLimit) || 5;
   const trigger = req.body?.trigger || 'manual';
   const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
@@ -4196,6 +4224,7 @@ app.get('/employment-history', async (req, res) => {
 });
 
 app.post('/sync-employment-history', async (req, res) => {
+  if (checkSchedulerLock(res)) return;
   const topLimit = parseInt(req.body?.topLimit) || 5;
   const trigger = req.body?.trigger || 'manual';
   const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
@@ -4215,6 +4244,7 @@ app.post('/sync-employment-history', async (req, res) => {
 
 // Alias route for dashboard manual push compatibility
 app.post('/sync-employmenthistory', async (req, res) => {
+  if (checkSchedulerLock(res)) return;
   const topLimit = parseInt(req.body?.topLimit) || 5;
   const trigger = req.body?.trigger || 'manual';
   const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
@@ -4255,6 +4285,7 @@ app.get('/audits', async (req, res) => {
 });
 
 app.post('/sync-audits', async (req, res) => {
+  if (checkSchedulerLock(res)) return;
   const topLimit = parseInt(req.body?.topLimit) || 5;
   const trigger = req.body?.trigger || 'manual';
   const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
@@ -4562,6 +4593,30 @@ app.get('/dashboard/preview/:table', async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   } finally {
+  }
+});
+
+app.get('/dashboard/practitioners/integrity-log', async (req, res) => {
+  let pool;
+  try {
+    pool = await sql.connect(importsConfig);
+    const request = pool.request();
+    let query = `
+      SELECT [LogId], [PractitionerNo], [DatabaseId], [FullName], [IssueType], 
+             [OldValue], [NewValue], [FixedBy], [FixedDate], 
+             [LiveStatusAtTimeOfCheck], [LiveRedFlagAtTimeOfCheck], [SourceOfLiveCheck], [Notes]
+      FROM [dbo].[Practitioner_DataIntegrity_Log]
+    `;
+    const issueType = req.query.issueType;
+    if (issueType) {
+      request.input('issueType', sql.NVarChar(100), issueType);
+      query += ` WHERE [IssueType] = @issueType`;
+    }
+    query += ` ORDER BY [LogId] DESC`;
+    const result = await request.query(query);
+    res.json({ success: true, count: result.recordset.length, rows: result.recordset });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -5031,8 +5086,36 @@ function normalizeBoolean(val) {
   if (val === null || val === undefined) return false;
   if (typeof val === 'boolean') return val;
   const s = String(val).trim().toLowerCase();
-  return s === 'true' || s === '1' || s === 'yes' || s === 'active';
+  return s === 'true' || s === '1' || s === 'yes' || s === 'active' || s === 'y';
 }
+
+function toYesNo(val) {
+  if (val === true || val === 1 || val === '1' || val === 'Y' || val === 'y' || String(val).trim().toLowerCase() === 'yes') return 'yes';
+  return 'no';
+}
+
+function checkSchedulerLock(res) {
+  if (schedulerState && schedulerState.isActive && schedulerState.currentTable) {
+    res.status(503).json({
+      success: false,
+      error: `Manual sync is locked while the master sequential scheduler is running (active table: ${schedulerState.currentTable}).`
+    });
+    return true;
+  }
+  return false;
+}
+
+function toBubbleDate(val, fallback = '1900-01-01T00:00:00.000Z') {
+  if (val === null || val === undefined || String(val).trim() === '' || String(val).toUpperCase() === 'NULL') return fallback;
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return fallback;
+    return d.toISOString();
+  } catch (e) {
+    return fallback;
+  }
+}
+
 
 const DIFF_MAP = {
   firms: {
@@ -6238,23 +6321,14 @@ async function startSequentialSequence(order, staggerSecs, intervalMinutes, topL
           schedulerState.consecutiveFailures[id] = 0;
           saveSchedulerState();
         } catch (tableErr) {
-          console.error(`❌ [Scheduler] [${new Date().toISOString()}] Table ${i + 1}/${order.length}: Failed sync for ${id} — Error: ${tableErr.message}`);
-          console.log(`📅 [Scheduler] Skipping failed table ${id} and proceeding to the next table.`);
-          
+          console.error(`❌ [Scheduler] Table ${id} failed. Aborting remaining sequence.`);
           schedulerState.consecutiveFailures[id] = (schedulerState.consecutiveFailures[id] || 0) + 1;
           schedulerState.lastFailureTime[id] = new Date().toISOString();
           schedulerState.lastFailureMessage[id] = tableErr.message;
-          
-          const threshold = schedulerState.settings.autoPauseCount || 3;
-          if (schedulerState.consecutiveFailures[id] >= threshold) {
-            console.warn(`⚠️ [Scheduler] Table ${id} reached consecutive failure threshold (${threshold}). Auto-pausing table.`);
-            if (!schedulerState.settings.pausedTables) schedulerState.settings.pausedTables = {};
-            schedulerState.settings.pausedTables[id] = true;
-          }
           saveSchedulerState();
-          
-          // Log to global dashboard error system
-          await logSyncError(id, 'SCHEDULER', `Sequential Scheduler failed on table ${id}: ${tableErr.message}`, bubbleBase, 'Network', 500, tableErr.stack);
+          await logSyncError(id, 'SCHEDULER', `Sequential Scheduler aborted on table ${id}: ${tableErr.message}`, bubbleBase, 'Network', 500, tableErr.stack);
+          shouldAbortSequence = true;
+          break;
         }
 
         if (i < order.length - 1 && staggerSecs > 0) {

@@ -1800,6 +1800,11 @@
   </div>
 
   <div class="page-body">
+    <!-- Sync Gap Warning Banner -->
+    <div class="transparency-note" style="margin-bottom: 20px; background: rgba(217, 119, 6, 0.1); border-left: 4px solid var(--amber); padding: 14px 18px; border-radius: var(--radius-md); font-size: 13px; color: var(--text-2); line-height: 1.5; box-shadow: var(--shadow-sm);">
+      ⚠️ <strong>Sync Gap Notice:</strong> The core SQL database <code>dbo.Core_Persons</code> is confirmed stale (last batch import from LPC/MDM was <strong>May 13, 2026</strong>) with no automatic sync-back from Bubble. When verifying practitioner records, always perform a live check against the Bubble portal database before applying updates.
+    </div>
+
     <!-- Data Status Note -->
     <div class="transparency-note" id="live-transparency-banner" style="margin-bottom: 20px; background: var(--blue-light); border-left: 4px solid var(--blue); padding: 14px 18px; border-radius: var(--radius-md); font-size: 13px; color: var(--text-2); line-height: 1.5; box-shadow: var(--shadow-sm); display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;">
       <div>
@@ -7013,6 +7018,49 @@ async function loadLiveDashboard() {
                     </div>
                   </div>
 
+                  ${t.id === 'practitioners' ? `
+                  <!-- Practitioner Data Integrity Log -->
+                  <div style="background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--purple); border-radius: 6px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); margin-top: 12px; width: 100%;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+                      <strong style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-sub);">Practitioner Data Integrity Log</strong>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 11px; color: var(--text-muted);">Issue Type:</span>
+                        <select id="prac-log-filter" onchange="filterPractitionerLog()" style="padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); font-size: 11px; background: var(--surface); color: var(--text);">
+                          <option value="">All Issues</option>
+                          <option value="WHITESPACE_FIXED">Whitespace Fixed</option>
+                          <option value="DUPLICATE_MERGED">Duplicate Merged</option>
+                          <option value="ID_MISMATCH_FIXED">ID Mismatch Fixed</option>
+                          <option value="EXCLUDED_SUSPENDED">Excluded: Suspended</option>
+                          <option value="EXCLUDED_DECEASED">Excluded: Deceased</option>
+                          <option value="EXCLUDED_REDFLAG">Excluded: Red Flag</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div style="overflow-x: auto; max-height: 250px; border: 1px solid var(--border-2); border-radius: 4px;">
+                      <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;" class="proc-list-table">
+                        <thead>
+                          <tr style="border-bottom: 2px solid var(--border); color: var(--text-sub); font-weight: bold; background: var(--surface-2);">
+                            <th style="padding: 8px;">Prac No</th>
+                            <th style="padding: 8px;">Full Name</th>
+                            <th style="padding: 8px;">Issue Type</th>
+                            <th style="padding: 8px;">Old Value</th>
+                            <th style="padding: 8px;">New Value</th>
+                            <th style="padding: 8px;">Live Status</th>
+                            <th style="padding: 8px;">Live Red Flag</th>
+                            <th style="padding: 8px;">Source</th>
+                            <th style="padding: 8px;">Fixed By</th>
+                            <th style="padding: 8px;">Date</th>
+                            <th style="padding: 8px;">Notes</th>
+                          </tr>
+                        </thead>
+                        <tbody id="prac-integrity-log-tbody">
+                          <tr><td colspan="11" style="text-align: center; padding: 12px;" class="text-muted">Loading log data...</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  ` : ''}
+
                 </div>
                 
               </div>
@@ -7038,10 +7086,83 @@ function toggleRowDetails(id) {
     if (detailsRow.style.display === 'none') {
       detailsRow.style.display = 'table-row';
       if (btn) btn.innerHTML = '▲';
+      if (id === 'practitioners') {
+        loadPractitionerLog();
+      }
     } else {
       detailsRow.style.display = 'none';
       if (btn) btn.innerHTML = '▼';
     }
+  }
+}
+
+let cachedPracLogs = [];
+
+async function loadPractitionerLog() {
+  const tbody = document.getElementById('prac-integrity-log-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 12px;"><span class="spinner"></span> Loading log...</td></tr>';
+  
+  try {
+    const res = await fetch(settings.serverUrl + '/dashboard/practitioners/integrity-log');
+    const data = await res.json();
+    if (data.success) {
+      cachedPracLogs = data.rows || [];
+      renderPracLogRows(cachedPracLogs);
+    } else {
+      tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; padding: 12px; color: var(--red);">Error: ${data.error}</td></tr>`;
+    }
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; padding: 12px; color: var(--red);">Error: ${err.message}</td></tr>`;
+  }
+}
+
+function renderPracLogRows(rows) {
+  const tbody = document.getElementById('prac-integrity-log-tbody');
+  if (!tbody) return;
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 12px;" class="text-muted">No log entries found.</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = rows.map(r => {
+    const dateStr = r.FixedDate ? new Date(r.FixedDate).toLocaleString() : '—';
+    
+    let flagClass = 'badge-grey';
+    if (r.LiveRedFlagAtTimeOfCheck === 'yes') flagClass = 'badge-red';
+    else if (r.LiveRedFlagAtTimeOfCheck === 'no') flagClass = 'badge-green';
+
+    let statusClass = 'badge-grey';
+    if (r.LiveStatusAtTimeOfCheck === 'SUSPENDED' || r.LiveStatusAtTimeOfCheck === 'DECEASED') statusClass = 'badge-red';
+    else if (r.LiveStatusAtTimeOfCheck === 'PRACTISINGMEMBER') statusClass = 'badge-green';
+    
+    const rowStyle = ((r.Notes || '').includes('SUSPENDED')) || r.LiveStatusAtTimeOfCheck === 'SUSPENDED' || r.LiveStatusAtTimeOfCheck === 'DECEASED' ? 'background: rgba(239, 68, 68, 0.04); font-weight: 500;' : '';
+
+    return `
+      <tr style="${rowStyle}">
+        <td style="padding: 6px 8px; font-family: monospace;">${r.PractitionerNo || '—'}</td>
+        <td style="padding: 6px 8px;">${r.FullName || '—'}</td>
+        <td style="padding: 6px 8px;"><span class="badge ${(r.IssueType || '').startsWith('EXCLUDED') ? 'badge-amber' : 'badge-blue'}">${r.IssueType || '—'}</span></td>
+        <td style="padding: 6px 8px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${r.OldValue}">${r.OldValue || '—'}</td>
+        <td style="padding: 6px 8px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${r.NewValue}">${r.NewValue || '—'}</td>
+        <td style="padding: 6px 8px;"><span class="badge ${statusClass}">${r.LiveStatusAtTimeOfCheck || 'UNKNOWN'}</span></td>
+        <td style="padding: 6px 8px;"><span class="badge ${flagClass}">${r.LiveRedFlagAtTimeOfCheck || 'UNKNOWN'}</span></td>
+        <td style="padding: 6px 8px;"><span class="badge badge-grey">${r.SourceOfLiveCheck}</span></td>
+        <td style="padding: 6px 8px; color: var(--text-muted);">${r.FixedBy}</td>
+        <td style="padding: 6px 8px; font-family: monospace; font-size: 10px;">${dateStr}</td>
+        <td style="padding: 6px 8px; font-style: italic; color: var(--text-muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${r.Notes}">${r.Notes || '—'}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function filterPractitionerLog() {
+  const issueType = document.getElementById('prac-log-filter').value;
+  if (!issueType) {
+    renderPracLogRows(cachedPracLogs);
+  } else {
+    const filtered = cachedPracLogs.filter(r => r.IssueType === issueType);
+    renderPracLogRows(filtered);
   }
 }
 
