@@ -215,6 +215,7 @@
     .toggle-slider::before { content: ''; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; }
     .toggle input:checked + .toggle-slider { background: var(--green); }
     .toggle.toggle-amber input:checked + .toggle-slider { background: var(--amber); }
+    .toggle.toggle-red input:checked + .toggle-slider { background: #ef4444; }
     .toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
 
     /* ── BADGES ── */
@@ -1700,7 +1701,19 @@
       <div style="font-size: 12px; font-weight: 700; color: var(--text);">Legacy dev_run Write-back Integration</div>
       <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Sync status feedback write-back loop to legacy SQL database rows.</div>
     </div>
-    <span class="badge badge-green" style="font-size: 11px; padding: 6px 12px; border: 1px solid var(--green);">Write-back to dev_run: Enabled</span>
+    <span id="writeback-status-badge" class="badge badge-green" style="font-size: 11px; padding: 6px 12px; border: 1px solid var(--green);">Write-back to dev_run: Enabled</span>
+  </div>
+
+  <!-- Emergency dev_run Write-back Kill Switch -->
+  <div style="margin-top: 12px; padding: 12px; border: 1px solid #fecaca; background: #fef2f2; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+    <div>
+      <div style="font-size: 12px; font-weight: 700; color: #b91c1c;">🚨 EMERGENCY: Kill-Switch</div>
+      <div style="font-size: 11px; color: #991b1b; margin-top: 2px;">Disable dev_run SQL write-back immediately at runtime.</div>
+    </div>
+    <div class="toggle toggle-red">
+      <input type="checkbox" id="emergency-writeback-killswitch" onchange="toggleWritebackKillswitch()" />
+      <span class="toggle-slider"></span>
+    </div>
   </div>
 </div>
 
@@ -5176,8 +5189,51 @@ function syncSchedulerStatusFromServer() {
       renderSchedulerList();
       renderSyncControlList();
       renderLiveProcessesTable();
+
+      if (d.devRunWritebackDisabled !== undefined) {
+        var killSwitch = document.getElementById('emergency-writeback-killswitch');
+        if (killSwitch) {
+          killSwitch.checked = !!d.devRunWritebackDisabled;
+        }
+        updateWritebackUIBadge(d.devRunWritebackDisabled);
+      }
     })
     .catch(function(){});
+}
+
+function updateWritebackUIBadge(disabled) {
+  var badge = document.getElementById('writeback-status-badge');
+  if (badge) {
+    if (disabled) {
+      badge.textContent = 'Write-back to dev_run: Disabled (Emergency Lock)';
+      badge.className = 'badge badge-red';
+      badge.style.border = '1px solid var(--red)';
+    } else {
+      badge.textContent = 'Write-back to dev_run: Enabled';
+      badge.className = 'badge badge-green';
+      badge.style.border = '1px solid var(--green)';
+    }
+  }
+}
+
+function toggleWritebackKillswitch() {
+  var disabled = document.getElementById('emergency-writeback-killswitch').checked;
+  fetch(settings.serverUrl + '/api/writeback/toggle', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ disabled: disabled })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.success) {
+      updateWritebackUIBadge(d.disabled);
+      toast(d.disabled ? '🚨 dev_run Write-back DISABLED' : '✅ dev_run Write-back ENABLED');
+    }
+  })
+  .catch(function(e) {
+    toast('✕ Error toggling write-back killswitch');
+    document.getElementById('emergency-writeback-killswitch').checked = !disabled;
+  });
 }
 
 function saveGlobalInterval() {

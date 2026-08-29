@@ -6160,8 +6160,34 @@ app.post('/dashboard/reconciliation/run', (req, res) => {
 // HARD LOCK: Must default to false. Can only be enabled via environment variable ENABLE_DEV_RUN_WRITEBACK = 'true'
 const ENABLE_DEV_RUN_WRITEBACK = true;
 
+const WRITEBACK_STATE_FILE = path.join(__dirname, 'writeback_state.json');
+let devRunWritebackDisabled = false;
+
+function loadWritebackState() {
+  try {
+    if (fs.existsSync(WRITEBACK_STATE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(WRITEBACK_STATE_FILE, 'utf8'));
+      devRunWritebackDisabled = !!data.disabled;
+      console.log(`📂 [Write-Back Lock] Loaded state: disabled=${devRunWritebackDisabled}`);
+    }
+  } catch (err) {
+    console.error('❌ Failed to load writeback state:', err.message);
+  }
+}
+
+function saveWritebackState() {
+  try {
+    fs.writeFileSync(WRITEBACK_STATE_FILE, JSON.stringify({ disabled: devRunWritebackDisabled }, null, 2), 'utf8');
+  } catch (err) {
+    console.error('❌ Failed to save writeback state:', err.message);
+  }
+}
+
+// Load writeback state on boot
+loadWritebackState();
+
 async function writeBackDevRun(pool, tableName, idField, idValue, targetDevRun = 2) {
-  if (!ENABLE_DEV_RUN_WRITEBACK) return;
+  if (!ENABLE_DEV_RUN_WRITEBACK || devRunWritebackDisabled) return;
   try {
     const request = pool.request();
     request.input('id', sql.VarChar, String(idValue));
@@ -6601,6 +6627,7 @@ app.get('/scheduler/status', (req, res) => {
     success: true,
     bootLockActive: Date.now() - SERVER_BOOT_TIME < 30000,
     masterSequential: schedulerState.isActive,
+    devRunWritebackDisabled: devRunWritebackDisabled,
     currentTable: schedulerState.currentTable,
     lastRunTime: schedulerState.lastRunTime,
     nextRunTime: schedulerState.nextRunTime,
@@ -6615,6 +6642,14 @@ app.get('/scheduler/status', (req, res) => {
       shouldStop: activeSyncs[id].shouldStop,
     })),
   });
+});
+
+app.post('/api/writeback/toggle', (req, res) => {
+  const { disabled } = req.body;
+  devRunWritebackDisabled = !!disabled;
+  saveWritebackState();
+  console.log(`⚠️ [Write-Back Lock] Emergency kill-switch toggled: disabled=${devRunWritebackDisabled}`);
+  res.json({ success: true, disabled: devRunWritebackDisabled });
 });
 
 // ─── /sync/stop ──────────────────────────────────────────────────────────────
