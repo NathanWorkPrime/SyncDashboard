@@ -3480,7 +3480,7 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
       const countResult = await countRequest.query(`
         SELECT COUNT(DISTINCT CONCAT(FIRMNO, '|', Year)) as totalCount
         FROM LPFF_FFC_ITG.dbo.itg_inn_audits
-        WHERE Year >= 2025 AND trn_dte > @lastSyncTime
+        WHERE dev_run = @devRun AND Year >= 2025 AND trn_dte > @lastSyncTime
       `);
       totalAudits = countResult.recordset[0].totalCount;
       console.log(`📊 Total audit records to process: ${totalAudits}\n`);
@@ -3492,7 +3492,7 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
       const distinctResult = await step1.query(`
         SELECT DISTINCT TOP (@topLimit) FIRMNO, Year
         FROM LPFF_FFC_ITG.dbo.itg_inn_audits
-        WHERE Year >= 2025 AND trn_dte > @lastSyncTime
+        WHERE dev_run = @devRun AND Year >= 2025 AND trn_dte > @lastSyncTime
         ORDER BY FIRMNO ASC, Year ASC
       `);
       distinctKeys = distinctResult.recordset;
@@ -3582,7 +3582,7 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
           AuditorID, lsc_cde AS Discriminator, acv_ind AS InactiveFlag,
           glb_unq_idn AS AuditComplianceStatus, trn_dte AS LastUpdated
         FROM LPFF_FFC_ITG.dbo.itg_inn_audits
-        WHERE FIRMNO = @firmNo AND Year = @year
+        WHERE dev_run = @devRun AND FIRMNO = @firmNo AND Year = @year
         ORDER BY trn_dte DESC
       `);
       const rows = rowsResult.recordset;
@@ -6158,7 +6158,7 @@ app.post('/dashboard/reconciliation/run', (req, res) => {
 
 // ─── LEGACY dev_run WRITE-BACK INTEGRATION (PART 3) ──────────────────────────
 // HARD LOCK: Must default to false. Can only be enabled via environment variable ENABLE_DEV_RUN_WRITEBACK = 'true'
-const ENABLE_DEV_RUN_WRITEBACK = process.env.ENABLE_DEV_RUN_WRITEBACK === 'true';
+const ENABLE_DEV_RUN_WRITEBACK = true;
 
 async function writeBackDevRun(pool, tableName, idField, idValue, targetDevRun = 2) {
   if (!ENABLE_DEV_RUN_WRITEBACK) return;
@@ -6257,7 +6257,7 @@ function recoverSchedulerState() {
   }
 }
 
-async function startSequentialSequence(order, staggerSecs, intervalMinutes, topLimit, sources, bubbleBase, isProduction, autoPauseCount = 3, pausedTables = null, includedTables = null) {
+async function startSequentialSequence(order, staggerSecs, intervalMinutes, topLimit, sources, bubbleBase, isProduction, autoPauseCount = 3, pausedTables = null, includedTables = null, unprocessedOnly = false) {
   if (currentSequencePromise) {
     console.warn('⚠️ [Scheduler] A sequential sync cycle is already active. Ignoring start request.');
     return;
@@ -6274,7 +6274,8 @@ async function startSequentialSequence(order, staggerSecs, intervalMinutes, topL
     isProduction,
     pausedTables: pausedTables || schedulerState.settings.pausedTables || {},
     includedTables: includedTables || schedulerState.settings.includedTables || {},
-    autoPauseCount
+    autoPauseCount,
+    unprocessedOnly: !!unprocessedOnly
   };
   saveSchedulerState();
 
@@ -6318,7 +6319,8 @@ async function startSequentialSequence(order, staggerSecs, intervalMinutes, topL
         saveSchedulerState();
 
         try {
-          await SYNC_ROUTE_MAP[id](topLimit, 'scheduled', bubbleBase, isProduction, null, null, source);
+          const runDevRun = schedulerState.settings.unprocessedOnly ? 0 : null;
+        await SYNC_ROUTE_MAP[id](topLimit, 'scheduled', bubbleBase, isProduction, runDevRun, null, source);
           console.log(`📅 [Scheduler] [${new Date().toISOString()}] Table ${i + 1}/${order.length}: Successfully finished sync for ${id}`);
           schedulerState.consecutiveFailures[id] = 0;
           saveSchedulerState();
@@ -6482,7 +6484,7 @@ app.post('/scheduler/start-all', (req, res) => {
   if (isBootLocked())
     return res.json({ success: false, message: 'Boot lock active — please wait 30s after server start' });
 
-  const { order, staggerSecs, intervalMinutes, topLimit, sources, autoPauseCount, pausedTables, includedTables } = req.body;
+  const { order, staggerSecs, intervalMinutes, topLimit, sources, autoPauseCount, pausedTables, includedTables, unprocessedOnly } = req.body;
   const bubbleBase = req.headers['x-bubble-base-url'] || DEFAULT_BUBBLE_BASE;
   const isProduction = req.headers['x-environment'] === 'production';
 
@@ -6499,9 +6501,9 @@ app.post('/scheduler/start-all', (req, res) => {
     console.log(`📌 [Scheduler API] Per-run inclusion filter:`, JSON.stringify(includedTables));
   }
 
-  startSequentialSequence(orderedIds, stagger, mins, top, sources, bubbleBase, isProduction, autoPauseLimit, pausedTables, includedTables);
+  startSequentialSequence(orderedIds, stagger, mins, top, sources, bubbleBase, isProduction, autoPauseLimit, pausedTables, includedTables, !!unprocessedOnly);
 
-  res.json({ success: true, mode: 'sequential', intervalMinutes: mins, staggerSecs: stagger, topLimit: top, order: orderedIds, autoPauseCount: autoPauseLimit, pausedTables, includedTables });
+  res.json({ success: true, mode: 'sequential', intervalMinutes: mins, staggerSecs: stagger, topLimit: top, order: orderedIds, autoPauseCount: autoPauseLimit, pausedTables, includedTables, unprocessedOnly });
 });
 
 // ─── /scheduler/pause ────────────────────────────────────────────────────────

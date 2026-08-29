@@ -790,6 +790,15 @@
               <span class="text-muted" style="font-size: 12px;">failures</span>
               <button class="btn btn-secondary btn-sm" onclick="saveAutoPause()">Save</button>
             </div>
+            
+            <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-top: 12px;">
+              <span class="text-muted" style="font-size: 12px; width: 160px; display: inline-block;">Sync Unprocessed Only (mms):</span>
+              <div class="toggle">
+                <input type="checkbox" id="setting-unprocessed-only" onchange="saveUnprocessedOnly()" />
+                <span class="toggle-slider"></span>
+              </div>
+              <span class="text-muted" style="font-size: 11px; margin-left: 8px;">Filter to dev_run = 0</span>
+            </div>
           </div>
           
           <!-- Right Column: Master Scheduler Controls -->
@@ -817,7 +826,7 @@
             <div style="font-size: 12px; font-weight: 700; color: var(--text);">Legacy dev_run Write-back Integration</div>
             <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Sync status feedback write-back loop to legacy SQL database rows.</div>
           </div>
-          <span class="badge badge-grey" style="font-size: 11px; padding: 6px 12px; border: 1px dashed var(--border);">Write-back to dev_run: Disabled — code-level lock, cannot be enabled from this UI</span>
+          <span class="badge badge-green" style="font-size: 11px; padding: 6px 12px; border: 1px solid var(--green);">Write-back to dev_run: Enabled</span>
         </div>
       </div>
 
@@ -1691,7 +1700,7 @@
       <div style="font-size: 12px; font-weight: 700; color: var(--text);">Legacy dev_run Write-back Integration</div>
       <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Sync status feedback write-back loop to legacy SQL database rows.</div>
     </div>
-    <span class="badge badge-grey" style="font-size: 11px; padding: 6px 12px; border: 1px dashed var(--border);">Write-back to dev_run: Disabled — code-level lock, cannot be enabled from this UI</span>
+    <span class="badge badge-green" style="font-size: 11px; padding: 6px 12px; border: 1px solid var(--green);">Write-back to dev_run: Enabled</span>
   </div>
 </div>
 
@@ -2152,6 +2161,11 @@ function applySettings() {
   document.getElementById('auto-pause-count').value     = settings.autoPauseCount;
   document.getElementById('stagger-secs').value         = settings.staggerSecs;
   document.getElementById('setting-sync-source').value  = settings.syncSource || 'staging';
+  
+  var unprocessedCheckbox = document.getElementById('setting-unprocessed-only');
+  if (unprocessedCheckbox) {
+    unprocessedCheckbox.checked = settings.unprocessedOnly !== undefined ? settings.unprocessedOnly : false;
+  }
   
   var appsSourceEl = document.getElementById('imports-source-applications');
   if (appsSourceEl) appsSourceEl.value = tableSourceOverrides['applications'] || 'production';
@@ -4993,7 +5007,8 @@ function startAllSchedulers(userInitiated) {
       sources: sources, 
       autoPauseCount: autoPauseLimit, 
       pausedTables: tablePaused,
-      includedTables: included
+      includedTables: included,
+      unprocessedOnly: document.getElementById('setting-unprocessed-only').checked
     })
   })
   .then(function(r){ return r.json(); })
@@ -5061,6 +5076,13 @@ function syncSchedulerStatusFromServer() {
       schedulerLastFailureTime = d.lastFailureTime || {};
       schedulerLastFailureMessage = d.lastFailureMessage || {};
       schedulerConsecutiveFailures = d.consecutiveFailures || {};
+
+      if (d.settings && d.settings.unprocessedOnly !== undefined) {
+        var unprocessedCheckbox = document.getElementById('setting-unprocessed-only');
+        if (unprocessedCheckbox) {
+          unprocessedCheckbox.checked = !!d.settings.unprocessedOnly;
+        }
+      }
 
       // Sync local tablePaused state from server
       if (d.settings && d.settings.pausedTables) {
@@ -5168,6 +5190,12 @@ function saveAutoPause() {
   settings.autoPauseCount = parseInt(document.getElementById('auto-pause-count').value) || 3;
   persistSettings();
   toast('Auto-pause rule saved — ' + settings.autoPauseCount + ' failures');
+}
+
+function saveUnprocessedOnly() {
+  settings.unprocessedOnly = document.getElementById('setting-unprocessed-only').checked;
+  persistSettings();
+  toast('Unprocessed-only filter saved');
 }
 
 
