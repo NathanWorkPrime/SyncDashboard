@@ -6370,7 +6370,12 @@ let schedulerState = {
     isProduction: false,
     pausedTables: {},
     includedTables: {},
-    autoPauseCount: 3
+    autoPauseCount: 3,
+    schedule: {
+      activeDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+      startTime: '09:00',
+      endTime: '17:00'
+    }
   }
 };
 
@@ -6389,10 +6394,45 @@ function loadSchedulerState() {
       schedulerState.settings = schedulerState.settings || {};
       schedulerState.settings.pausedTables = schedulerState.settings.pausedTables || {};
       schedulerState.settings.autoPauseCount = schedulerState.settings.autoPauseCount || 3;
+      schedulerState.settings.schedule = schedulerState.settings.schedule || {
+        activeDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+        startTime: '09:00',
+        endTime: '17:00'
+      };
       console.log('📂 [Scheduler] Loaded state from disk:', JSON.stringify(schedulerState));
     }
   } catch (err) {
     console.error('❌ [Scheduler] Failed to load state:', err.message);
+  }
+}
+
+const DAYS_MAP = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function isSchedulerInActiveWindow(currentTime, config) {
+  if (!config || !config.activeDays || config.activeDays.length === 0) {
+    return false;
+  }
+
+  // 1. Day of Week Check
+  const currentDayName = DAYS_MAP[currentTime.getDay()];
+  if (!config.activeDays.includes(currentDayName)) {
+    return false;
+  }
+
+  // 2. Time Window Check
+  const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+
+  const [startH, startM] = (config.startTime || '09:00').split(':').map(Number);
+  const [endH, endM] = (config.endTime || '17:00').split(':').map(Number);
+  const startMinutes = startH * 60 + startM;
+  const endMinutes = endH * 60 + endM;
+
+  if (startMinutes <= endMinutes) {
+    // Standard range (e.g. 09:00 - 17:00)
+    return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+  } else {
+    // Overnight range (e.g. 22:00 - 06:00)
+    return currentMinutes >= startMinutes || currentMinutes <= endMinutes;
   }
 }
 
@@ -6456,6 +6496,19 @@ async function startSequentialSequence(order, staggerSecs, intervalMinutes, topL
 
   const runCycle = async () => {
     try {
+      const currentTime = new Date();
+      if (!isSchedulerInActiveWindow(currentTime, schedulerState.settings.schedule)) {
+        console.log(`📅 [Scheduler] Skipped cycle run: Outside configured active hours (Active days: ${JSON.stringify(schedulerState.settings.schedule?.activeDays)}, Window: ${schedulerState.settings.schedule?.startTime}-${schedulerState.settings.schedule?.endTime})`);
+        const nextRunMs = schedulerState.settings.intervalMinutes * 60 * 1000;
+        schedulerState.nextRunTime = new Date(Date.now() + nextRunMs).toISOString();
+        saveSchedulerState();
+        if (schedulerState.isActive && !shouldAbortSequence) {
+          console.log(`⏳ [Scheduler] Next sequence cycle rescheduled in ${schedulerState.settings.intervalMinutes} minutes (at ${schedulerState.nextRunTime})`);
+          nextSequenceTimeout = setTimeout(runCycle, nextRunMs);
+        }
+        return;
+      }
+
       console.log(`\n🔄 [Scheduler] Sequence cycle started at ${new Date().toISOString()}`);
       schedulerState.lastRunTime = new Date().toISOString();
       schedulerState.nextRunTime = null;
@@ -6797,6 +6850,40 @@ app.post('/api/writeback/toggle', (req, res) => {
   saveWritebackState();
   console.log(`⚠️ [Write-Back Lock] Emergency kill-switch toggled: disabled=${devRunWritebackDisabled}`);
   res.json({ success: true, disabled: devRunWritebackDisabled });
+});
+
+app.get('/api/scheduler/config', (req, res) => {
+  res.json({
+    success: true,
+    schedule: schedulerState.settings.schedule || {
+      activeDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+      startTime: '09:00',
+      endTime: '17:00'
+    }
+  });
+});
+
+app.post('/api/scheduler/config', (req, res) => {
+  const { activeDays, startTime, endTime } = req.body;
+
+  if (!Array.isArray(activeDays) || activeDays.length === 0) {
+    return res.status(400).json({ success: false, error: 'At least one active day must be selected.' });
+  }
+
+  const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+  if (!startTime || !endTime || !timeRegex.test(startTime) || !timeRegex.test(endTime)) {
+    return res.status(400).json({ success: false, error: 'Start and End times must be in valid HH:MM format.' });
+  }
+
+  schedulerState.settings.schedule = {
+    activeDays,
+    startTime,
+    endTime
+  };
+  saveSchedulerState();
+
+  console.log(`⏱️ [Scheduler Config] Updated active window: ${JSON.stringify(schedulerState.settings.schedule)}`);
+  res.json({ success: true, schedule: schedulerState.settings.schedule });
 });
 
 // ─── /sync/stop ──────────────────────────────────────────────────────────────

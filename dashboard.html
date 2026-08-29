@@ -218,6 +218,28 @@
     .toggle.toggle-red input:checked + .toggle-slider { background: #ef4444; }
     .toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
 
+    .day-chip {
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid var(--border);
+      color: var(--text-sub);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease-in-out;
+      user-select: none;
+      outline: none;
+    }
+    .day-chip.active {
+      background: var(--purple-light);
+      border-color: var(--purple);
+      color: var(--purple);
+    }
+    .day-chip:hover {
+      border-color: rgba(139, 92, 246, 0.5);
+    }
+
     /* ── BADGES ── */
     .badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; }
     .badge-green  { background: var(--green-light);  color: #059669; }
@@ -819,6 +841,51 @@
                 When active, all tables sync sequentially in the order shown below. The global interval countdown starts only after the last table finishes.
               </p>
             </div>
+          </div>
+        </div>
+
+        <!-- Active Sync Window Panel -->
+        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border);">
+          <div style="font-weight: 700; font-size: 13px; color: var(--text-sub); margin-bottom: 12px;">📅 Active Scheduling Window</div>
+          <p class="text-muted" style="font-size: 11px; margin-bottom: 12px;">Restrict automated background sequential runs to only execute during specific days and hours.</p>
+          
+          <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start;">
+            <!-- Day Selection -->
+            <div style="flex: 1.2; min-width: 250px;">
+              <div class="text-muted" style="font-size: 11px; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Active Days:</div>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <button class="day-chip" data-day="Mon" onclick="toggleDayChip(this)">Mon</button>
+                <button class="day-chip" data-day="Tue" onclick="toggleDayChip(this)">Tue</button>
+                <button class="day-chip" data-day="Wed" onclick="toggleDayChip(this)">Wed</button>
+                <button class="day-chip" data-day="Thu" onclick="toggleDayChip(this)">Thu</button>
+                <button class="day-chip" data-day="Fri" onclick="toggleDayChip(this)">Fri</button>
+                <button class="day-chip" data-day="Sat" onclick="toggleDayChip(this)">Sat</button>
+                <button class="day-chip" data-day="Sun" onclick="toggleDayChip(this)">Sun</button>
+              </div>
+            </div>
+            
+            <!-- Time Window Selection -->
+            <div style="flex: 1; min-width: 220px; display: flex; gap: 12px; align-items: flex-end;">
+              <div class="form-group" style="flex: 1; margin: 0;">
+                <label for="sched-start-time" class="text-muted" style="font-size: 11px; font-weight: 700; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Start (Local):</label>
+                <input type="time" id="sched-start-time" class="form-control" style="padding: 8px 12px;" required />
+              </div>
+              <div class="form-group" style="flex: 1; margin: 0;">
+                <label for="sched-end-time" class="text-muted" style="font-size: 11px; font-weight: 700; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">End (Local):</label>
+                <input type="time" id="sched-end-time" class="form-control" style="padding: 8px 12px;" required />
+              </div>
+              <button class="btn btn-primary" onclick="saveActiveWindow()" style="height: 35px; padding: 0 16px; margin: 0; font-size: 13px;">Save Window</button>
+            </div>
+          </div>
+          
+          <div id="sched-window-error" style="color: var(--red); font-size: 12px; margin-top: 8px; display: none; align-items: center; gap: 6px;">
+            <span>⚠️</span>
+            <span id="sched-window-error-text"></span>
+          </div>
+          
+          <div style="margin-top: 12px; font-size: 12px; color: var(--text-sub); display: flex; align-items: center; gap: 6px;">
+            <span>Current Schedule:</span>
+            <strong id="sched-window-summary-text" style="color: var(--purple);">Loading...</strong>
           </div>
         </div>
         
@@ -2260,6 +2327,7 @@ function switchTab(tabId) {
   if (tabId === 'tab-scheduler') {
     renderSchedulerList();
     renderLiveProcessesTable();
+    loadSchedulerConfig();
   }
   if (tabId === 'tab-imports') loadImportsWatermarks();
 }
@@ -5217,6 +5285,10 @@ function syncSchedulerStatusFromServer() {
       renderSyncControlList();
       renderLiveProcessesTable();
 
+      if (d.settings && d.settings.schedule) {
+        updateSchedulerSummaryText(d.settings.schedule);
+      }
+
       if (d.devRunWritebackDisabled !== undefined) {
         var killSwitch = document.getElementById('emergency-writeback-killswitch');
         if (killSwitch) {
@@ -7397,6 +7469,108 @@ async function loadVersions() {
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--red);">Error loading versions: ${err.message}</td></tr>`;
   }
+}
+
+// --- ACTIVE SCHEDULING WINDOW LOGIC ---
+
+function toggleDayChip(btn) {
+  btn.classList.toggle('active');
+}
+
+function loadSchedulerConfig() {
+  fetch(settings.serverUrl + '/api/scheduler/config')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.success && d.schedule) {
+        hideInlineError();
+        // Set chips active state
+        const activeDays = d.schedule.activeDays || [];
+        document.querySelectorAll('.day-chip').forEach(function(btn) {
+          const day = btn.getAttribute('data-day');
+          if (activeDays.includes(day)) {
+            btn.classList.add('active');
+          } else {
+            btn.classList.remove('active');
+          }
+        });
+
+        // Set time inputs
+        document.getElementById('sched-start-time').value = d.schedule.startTime || '09:00';
+        document.getElementById('sched-end-time').value = d.schedule.endTime || '17:00';
+
+        // Update summary text
+        updateSchedulerSummaryText(d.schedule);
+      }
+    })
+    .catch(function(err) {
+      console.error('Error loading scheduler config:', err);
+    });
+}
+
+function updateSchedulerSummaryText(schedule) {
+  const summaryEl = document.getElementById('sched-window-summary-text');
+  if (summaryEl && schedule) {
+    const daysStr = schedule.activeDays && schedule.activeDays.length > 0
+      ? schedule.activeDays.join(', ')
+      : 'None';
+    summaryEl.textContent = 'Active ' + daysStr + ', ' + (schedule.startTime || '09:00') + ' - ' + (schedule.endTime || '17:00');
+  }
+}
+
+function showInlineError(msg) {
+  const errBox = document.getElementById('sched-window-error');
+  const errText = document.getElementById('sched-window-error-text');
+  if (errBox && errText) {
+    errText.textContent = msg;
+    errBox.style.display = 'flex';
+  }
+}
+
+function hideInlineError() {
+  const errBox = document.getElementById('sched-window-error');
+  if (errBox) {
+    errBox.style.display = 'none';
+  }
+}
+
+function saveActiveWindow() {
+  hideInlineError();
+  const activeDays = [];
+  document.querySelectorAll('.day-chip.active').forEach(function(btn) {
+    activeDays.push(btn.getAttribute('data-day'));
+  });
+
+  if (activeDays.length === 0) {
+    showInlineError('Validation Error: At least one active day must be selected.');
+    return;
+  }
+
+  const startTime = document.getElementById('sched-start-time').value;
+  const endTime = document.getElementById('sched-end-time').value;
+
+  if (!startTime || !endTime) {
+    showInlineError('Validation Error: Both Start and End times are required.');
+    return;
+  }
+
+  fetch(settings.serverUrl + '/api/scheduler/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ activeDays, startTime, endTime })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.success) {
+      updateSchedulerSummaryText(d.schedule);
+      showToast('Active scheduling window saved successfully!', 'success');
+    } else {
+      showInlineError(d.error || 'Unknown validation error');
+    }
+  })
+  .catch(function(err) {
+    showInlineError('Network error saving active window config.');
+    console.error(err);
+  });
 }
 </script>
 
