@@ -508,6 +508,7 @@
     <button class="notif-btn" onclick="toggleNotifPanel()" title="Notifications">
       🔔<span class="notif-dot" id="notif-dot"></span>
     </button>
+    <button class="btn btn-sm btn-secondary" onclick="handleLogout()" title="Logout" style="margin-left: 8px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: var(--red); font-weight: 600; padding: 6px 12px; border-radius: var(--radius-sm);">Logout</button>
     <button class="dark-toggle" onclick="toggleDarkMode()" id="dark-btn" title="Toggle dark mode">🌙</button>
     <button class="btn btn-secondary btn-sm" onclick="checkServer()">↻</button>
   </div>
@@ -2197,6 +2198,26 @@ function toggleDarkMode() {
   applyDarkMode();
 }
 
+function handleLogout() {
+  if (confirm('Are you sure you want to log out of SyncDash?')) {
+    fetch(settings.serverUrl + '/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.success) {
+        window.location.href = '/login';
+      } else {
+        alert('Logout failed: ' + (d.error || 'Unknown error'));
+      }
+    })
+    .catch(function(e) {
+      alert('Error connecting to server for logout.');
+    });
+  }
+}
+
 // ── PAGE NAVIGATION ──
 function showPage(id) {
   var current = document.querySelector('.page.active');
@@ -3408,7 +3429,7 @@ function renderHistoryTable(logs, el) {
     return;
   }
   el.innerHTML = '<div style="overflow-x:auto;"><table class="proc-table">'
-    + '<thead><tr><th>#</th><th>Date</th><th>Time</th><th>Table</th><th>Trigger</th><th>Records</th><th>Errors</th><th>Err Rate</th><th>Avg/Rec</th><th>Status</th><th>Duration</th><th>Details</th></tr></thead>'
+    + '<thead><tr><th>#</th><th>Date</th><th>Time</th><th>Table</th><th>Env</th><th>Trigger</th><th>Records</th><th>Errors</th><th>Err Rate</th><th>Avg/Rec</th><th>Status</th><th>Duration</th><th>Details</th></tr></thead>'
     + '<tbody id="history-tbody">'
     + logs.map(function(l, i) {
         var ts       = formatTimeSplit(l.RunTimestamp);
@@ -3427,6 +3448,11 @@ var trigBadge = trigger === 'scheduled'
   ? '<span class="badge badge-purple">Dry Run</span>'
   : '<span class="badge badge-grey">Manual</span>';
 
+        var env = l.Environment || (activeEnv === 'prod' ? 'PROD' : 'DEV');
+        var envBadge = env === 'PROD'
+          ? '<span class="badge badge-green" style="border: 1px solid var(--green);">PROD</span>'
+          : '<span class="badge badge-amber" style="border: 1px solid var(--amber);">DEV</span>';
+
         var runNum   = (l.RunNumber || (logs.length - i));
         var rowId    = 'expand-' + i;
         var hasMsg   = !!(l.Message || l.Error);
@@ -3435,6 +3461,7 @@ var trigBadge = trigger === 'scheduled'
           + '<td><div class="proc-time-date">' + ts.date + '</div></td>'
           + '<td><div class="proc-time-clock">' + ts.time + '</div></td>'
           + '<td><span class="proc-table-name">' + (l.Table || '—') + '</span></td>'
+          + '<td>' + envBadge + '</td>'
           + '<td>' + trigBadge + '</td>'
           + '<td><span class="proc-records">' + synced + '</span></td>'
           + '<td style="color:' + (errs > 0 ? 'var(--red)' : 'var(--text-muted)') + ';font-weight:700;">' + errs + '</td>'
@@ -3444,7 +3471,7 @@ var trigBadge = trigger === 'scheduled'
           + '<td style="font-size:12px;color:var(--text-sub);">' + dur + '</td>'
           + '<td><button class="expand-btn">' + (hasMsg ? '▼ Info' : '—') + '</button></td>'
           + '</tr>'
-          + (hasMsg ? '<tr class="expand-row" id="' + rowId + '" style="display:none;"><td colspan="12">'
+          + (hasMsg ? '<tr class="expand-row" id="' + rowId + '" style="display:none;"><td colspan="13">'
               + '<strong>Message:</strong> ' + (l.Message || l.Error || '—')
               + '</td></tr>' : '');
       }).join('')
@@ -7357,7 +7384,7 @@ async function loadVersions() {
           <td style="font-family:monospace; font-weight:700; color:var(--purple);">${v.version}</td>
           <td><span style="font-size:12px; font-family:monospace;">${v.dateTime}</span></td>
           <td><strong>${v.author}</strong></td>
-          <td><span class="badge badge-grey">${v.environment}</span></td>
+          <td><span class="badge ${v.environment === 'PROD' ? 'badge-green' : 'badge-amber'}">${v.environment}</span></td>
           <td><span class="badge ${badgeClass}">${v.status}</span></td>
           <td><div style="max-width:350px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${v.summary.replace(/"/g, '&quot;')}">${v.summary}</div></td>
           <td><span class="badge badge-purple">${v.tags}</span></td>

@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SyncDash - Secure Login</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --surface: rgba(22, 30, 49, 0.7);
+      --border: rgba(255, 255, 255, 0.08);
+      --purple: #8b5cf6;
+      --purple-hover: #7c3aed;
+      --purple-light: rgba(139, 92, 246, 0.15);
+      --text: #f8fafc;
+      --text-sub: #94a3b8;
+      --red: #ef4444;
+      --green: #10b981;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Ambient glow elements */
+    .glow-1 {
+      position: absolute;
+      top: -10%;
+      left: -10%;
+      width: 40%;
+      height: 40%;
+      background: radial-gradient(circle, rgba(139, 92, 246, 0.12) 0%, rgba(0,0,0,0) 70%);
+      pointer-events: none;
+    }
+    .glow-2 {
+      position: absolute;
+      bottom: -10%;
+      right: -10%;
+      width: 40%;
+      height: 40%;
+      background: radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, rgba(0,0,0,0) 70%);
+      pointer-events: none;
+    }
+
+    .container {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 420px;
+      padding: 20px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px 32px;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      transition: all 0.3s ease;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .logo-area {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 54px;
+      height: 54px;
+      border-radius: 12px;
+      background: var(--purple-light);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      color: var(--purple);
+      font-size: 26px;
+      font-weight: 700;
+      font-family: 'Outfit', sans-serif;
+      margin-bottom: 16px;
+      box-shadow: 0 0 15px rgba(139, 92, 246, 0.2);
+    }
+
+    .title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--text-sub);
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-sub);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .form-control {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: var(--text);
+      font-size: 14px;
+      transition: all 0.15s ease-in-out;
+      outline: none;
+    }
+
+    .form-control:focus {
+      border-color: var(--purple);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+      background: rgba(15, 23, 42, 0.8);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      background: var(--purple);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease-in-out;
+      margin-top: 10px;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+    }
+
+    .btn:hover {
+      background: var(--purple-hover);
+      box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    /* Step transition animation */
+    .form-step {
+      display: none;
+      animation: fadeIn 0.4s forwards;
+    }
+
+    .form-step.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .error-msg {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: var(--red);
+      font-size: 13px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      display: none;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* TOTP digit fields container */
+    .totp-input-wrap {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 16px 0;
+    }
+
+    .totp-digit {
+      width: 48px;
+      height: 52px;
+      text-align: center;
+      font-size: 22px;
+      font-weight: 700;
+      font-family: 'Outfit', sans-serif;
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border);
+      color: var(--text);
+      outline: none;
+      transition: all 0.15s;
+    }
+
+    .totp-digit:focus {
+      border-color: var(--purple);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+    }
+
+    .totp-hidden {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+      left: -9999px;
+    }
+
+    .badge-mfa {
+      background: var(--purple-light);
+      color: #c084fc;
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      display: inline-block;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="glow-1"></div>
+  <div class="glow-2"></div>
+
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <div class="logo-area">⚡</div>
+        <div class="title" id="card-title">SyncDash Gateway</div>
+        <div class="subtitle" id="card-subtitle">Fidelity Fund Sync Portal</div>
+      </div>
+
+      <div class="error-msg" id="error-box">
+        <span>⚠️</span>
+        <span id="error-text">Invalid credentials. Please try again.</span>
+      </div>
+
+      <!-- STEP 1: Credential Login -->
+      <form id="login-form" class="form-step active" onsubmit="handleCredentialSubmit(event)">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" class="form-control" autocomplete="username" placeholder="e.g. nathan" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" class="form-control" autocomplete="current-password" placeholder="Enter password" required>
+        </div>
+        <button type="submit" class="btn">Continue</button>
+      </form>
+
+      <!-- STEP 2: TOTP Authentication -->
+      <div id="totp-form" class="form-step">
+        <div style="text-align: center;">
+          <span class="badge-mfa">2-Step Verification</span>
+          <p style="font-size: 14px; color: var(--text-sub); margin-bottom: 20px;">
+            Enter the 6-digit verification code generated by your Authenticator app.
+          </p>
+        </div>
+
+        <form onsubmit="handleTotpSubmit(event)">
+          <!-- Hidden real input to capture clipboard pastes and keyboard input -->
+          <input type="text" id="totp-hidden-input" class="totp-hidden" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
+          
+          <div class="totp-input-wrap" onclick="focusTotpHidden()">
+            <input type="text" class="totp-digit" id="digit-0" readonly maxlength="1">
+            <input type="text" class="totp-digit" id="digit-1" readonly maxlength="1">
+            <input type="text" class="totp-digit" id="digit-2" readonly maxlength="1">
+            <input type="text" class="totp-digit" id="digit-3" readonly maxlength="1">
+            <input type="text" class="totp-digit" id="digit-4" readonly maxlength="1">
+            <input type="text" class="totp-digit" id="digit-5" readonly maxlength="1">
+          </div>
+          
+          <button type="submit" class="btn" style="margin-top: 15px;">Verify</button>
+          <p style="text-align: center; margin-top: 20px; font-size: 13px;">
+            <a href="#" onclick="resetToCredentials(event)" style="color: var(--purple); text-decoration: none; font-weight: 500;">← Back to login</a>
+          </p>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let tempUsername = '';
+
+    // Error helper
+    function showError(msg) {
+      const errorBox = document.getElementById('error-box');
+      const errorText = document.getElementById('error-text');
+      errorText.textContent = msg;
+      errorBox.style.display = 'flex';
+    }
+
+    function hideError() {
+      document.getElementById('error-box').style.display = 'none';
+    }
+
+    // Step 1: Submit Username & Password
+    function handleCredentialSubmit(e) {
+      e.preventDefault();
+      hideError();
+
+      const userVal = document.getElementById('username').value.trim();
+      const passVal = document.getElementById('password').value;
+
+      if (!userVal || !passVal) {
+        showError('Username and password are required.');
+        return;
+      }
+
+      fetch('/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: userVal, password: passVal })
+      })
+      .then(async r => {
+        const d = await r.json();
+        if (r.ok && d.requireTotp) {
+          tempUsername = userVal;
+          transitionToTotp();
+        } else {
+          showError(d.error || 'Invalid username or password.');
+        }
+      })
+      .catch(err => {
+        showError('Network error connecting to login server.');
+      });
+    }
+
+    // Transition between steps
+    function transitionToTotp() {
+      document.getElementById('login-form').classList.remove('active');
+      document.getElementById('totp-form').classList.add('active');
+      document.getElementById('card-title').textContent = 'Security Check';
+      document.getElementById('card-subtitle').textContent = 'Confirm your identity';
+      
+      // Auto focus the hidden TOTP input
+      setTimeout(focusTotpHidden, 200);
+    }
+
+    function resetToCredentials(e) {
+      if (e) e.preventDefault();
+      hideError();
+      tempUsername = '';
+      document.getElementById('totp-hidden-input').value = '';
+      clearDigits();
+      
+      document.getElementById('totp-form').classList.remove('active');
+      document.getElementById('login-form').classList.add('active');
+      document.getElementById('card-title').textContent = 'SyncDash Gateway';
+      document.getElementById('card-subtitle').textContent = 'Fidelity Fund Sync Portal';
+    }
+
+    // TOTP digit boxes formatting & input capture
+    const hiddenInput = document.getElementById('totp-hidden-input');
+    const digitInputs = [
+      document.getElementById('digit-0'),
+      document.getElementById('digit-1'),
+      document.getElementById('digit-2'),
+      document.getElementById('digit-3'),
+      document.getElementById('digit-4'),
+      document.getElementById('digit-5')
+    ];
+
+    function focusTotpHidden() {
+      hiddenInput.focus();
+    }
+
+    function clearDigits() {
+      digitInputs.forEach(input => input.value = '');
+    }
+
+    hiddenInput.addEventListener('input', (e) => {
+      const val = e.target.value.replace(/[^0-9]/g, '');
+      e.target.value = val; // sanitise real input
+      
+      clearDigits();
+      for (let i = 0; i < val.length && i < 6; i++) {
+        digitInputs[i].value = val[i];
+      }
+
+      // Highlight active focus cell
+      digitInputs.forEach(input => input.style.borderColor = '');
+      if (val.length < 6) {
+        digitInputs[val.length].style.borderColor = 'var(--purple)';
+      }
+    });
+
+    hiddenInput.addEventListener('focus', () => {
+      const idx = Math.min(hiddenInput.value.length, 5);
+      digitInputs[idx].style.borderColor = 'var(--purple)';
+    });
+
+    hiddenInput.addEventListener('blur', () => {
+      digitInputs.forEach(input => input.style.borderColor = '');
+    });
+
+    // Step 2: Submit TOTP code
+    function handleTotpSubmit(e) {
+      e.preventDefault();
+      hideError();
+
+      const mfaCode = hiddenInput.value;
+      if (mfaCode.length !== 6) {
+        showError('Please enter the 6-digit TOTP code.');
+        return;
+      }
+
+      fetch('/login/totp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: mfaCode })
+      })
+      .then(async r => {
+        const d = await r.json();
+        if (r.ok && d.success) {
+          // Success! Redirect to dashboard
+          window.location.href = '/dashboard';
+        } else {
+          showError(d.error || 'Invalid authentication code.');
+          hiddenInput.value = '';
+          clearDigits();
+          focusTotpHidden();
+        }
+      })
+      .catch(err => {
+        showError('Network error verifying authentication code.');
+      });
+    }
+  </script>
+</body>
+</html>

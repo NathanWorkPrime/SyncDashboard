@@ -16,8 +16,10 @@ const filesToDeploy = [
   'server.js',
   'dashboard.html',
   'dashboard4.html',
+  'login.html',
   'package.json',
-  'package-lock.json'
+  'package-lock.json',
+  'users_config.json'
 ];
 
 async function runDeployment() {
@@ -29,20 +31,28 @@ async function runDeployment() {
     const filePath = path.join(__dirname, filename);
     if (fs.existsSync(filePath)) {
       zip.addLocalFile(filePath);
-      console.log(`  + Added ${filename}`);
+      console.log(`  + Added file: ${filename}`);
       addedFilesCount++;
     } else {
-      console.warn(`  ⚠️  Warning: File not found: ${filename}`);
+      if (filename === 'users_config.json') {
+        console.warn(`  ⚠️  Warning: users_config.json not found locally. Proceeding without user credentials.`);
+      } else {
+        console.warn(`  ⚠️  Warning: File not found: ${filename}`);
+      }
     }
   }
 
-  if (addedFilesCount === 0) {
-    console.error('❌ Error: No files were added to the deployment package.');
-    process.exit(1);
+  // Package the entire node_modules directory to eliminate missing dependency risks
+  const nodeModulesPath = path.join(__dirname, 'node_modules');
+  if (fs.existsSync(nodeModulesPath)) {
+    console.log('  + Packaging entire node_modules directory...');
+    zip.addLocalFolder(nodeModulesPath, 'node_modules');
+  } else {
+    console.warn('  ⚠️  Warning: node_modules folder not found!');
   }
 
   const zipBuffer = zip.toBuffer();
-  console.log(`📦 Created package of ${addedFilesCount} files. Size: ${Math.round(zipBuffer.length / 1024)} KB`);
+  console.log(`\n📦 Created package. Size: ${Math.round(zipBuffer.length / 1024)} KB (${(zipBuffer.length / (1024 * 1024)).toFixed(2)} MB)`);
   console.log(`🚀 Shipping package to ${DEPLOY_URL}...`);
 
   try {

@@ -4,9 +4,41 @@ const sql = require("mssql");
 const AdmZip = require("adm-zip");
 const fs = require('fs');
 const path = require('path');
+const session = require('express-session');
+const bcrypt = require('bcryptjs');
+const speakeasy = require('speakeasy');
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
+
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'sync-dash-fallback-session-secret-key-1234567890',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    maxAge: 12 * 60 * 60 * 1000, // 12 hours
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: false // VM runs over http
+  }
+}));
+
+// Load users config
+const USERS_CONFIG_PATH = path.join(__dirname, 'users_config.json');
+let usersConfig = {};
+function loadUsersConfig() {
+  try {
+    if (fs.existsSync(USERS_CONFIG_PATH)) {
+      usersConfig = JSON.parse(fs.readFileSync(USERS_CONFIG_PATH, 'utf8'));
+      console.log(`📂 [Auth] Loaded ${Object.keys(usersConfig).length} user account(s) from users_config.json`);
+    } else {
+      console.log('⚠️ [Auth] Warning: users_config.json not found. Authentication will block all users until a user is enrolled.');
+    }
+  } catch (err) {
+    console.error('❌ [Auth] Failed to load users_config.json:', err.message);
+  }
+}
+loadUsersConfig();
 
 // ── Boot-time lock — blocks any scheduler call within 30s of startup ──────────
 const SERVER_BOOT_TIME = Date.now();
@@ -56,6 +88,110 @@ app.use(function (req, res, next) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-bubble-base-url, x-environment');
   if (req.method === 'OPTIONS') { res.sendStatus(200); return; }
   next();
+});
+
+function requireAuth(req, res, next) {
+  const publicPaths = [
+    '/login',
+    '/login/totp',
+    '/logout',
+    '/health',
+    '/health/bubble',
+    '/deploy'
+  ];
+
+  const pathName = req.path.toLowerCase();
+
+  if (publicPaths.includes(pathName)) {
+    return next();
+  }
+
+  if (req.session && req.session.user) {
+    return next();
+  }
+
+  // If page request, redirect to login
+  if (req.method === 'GET' && (pathName === '/dashboard' || pathName.endsWith('.html') || !pathName.includes('.'))) {
+    return res.redirect('/login');
+  }
+
+  res.status(401).json({ success: false, error: 'Unauthorized' });
+}
+
+app.use(requireAuth);
+
+// --- AUTHENTICATION ENDPOINTS ---
+
+app.get('/login', (req, res) => {
+  if (req.session && req.session.user) {
+    return res.redirect('/dashboard');
+  }
+  res.sendFile(path.join(__dirname, 'login.html'));
+});
+
+app.post('/login', (req, res) => {
+  req.session.user = null;
+  req.session.tempUser = null;
+
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ success: false, error: 'Username and password are required' });
+  }
+
+  loadUsersConfig();
+
+  const user = usersConfig[username.toLowerCase()];
+  if (!user) {
+    return res.status(401).json({ success: false, error: 'Invalid username or password' });
+  }
+
+  const match = bcrypt.compareSync(password, user.passwordHash);
+  if (!match) {
+    return res.status(401).json({ success: false, error: 'Invalid username or password' });
+  }
+
+  req.session.tempUser = username.toLowerCase();
+  res.json({ success: true, requireTotp: true });
+});
+
+app.post('/login/totp', (req, res) => {
+  const { code } = req.body;
+  const tempUser = req.session.tempUser;
+
+  if (!tempUser) {
+    return res.status(401).json({ success: false, error: 'Session expired. Please log in again.' });
+  }
+
+  const user = usersConfig[tempUser];
+  if (!user || !user.totpSecret) {
+    return res.status(500).json({ success: false, error: 'MFA is not configured for this user.' });
+  }
+
+  const verified = speakeasy.totp.verify({
+    secret: user.totpSecret,
+    encoding: 'base32',
+    token: code,
+    window: 1
+  });
+
+  if (!verified) {
+    return res.status(401).json({ success: false, error: 'Invalid authentication code.' });
+  }
+
+  req.session.user = tempUser;
+  req.session.tempUser = null;
+  res.json({ success: true });
+});
+
+app.post('/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      console.error('Logout session destruction failed:', err);
+      return res.status(500).json({ success: false, error: 'Logout failed' });
+    }
+    res.clearCookie('connect.sid');
+    res.json({ success: true });
+  });
 });
 
 // Serve static files (for dashboard assets like CSS/JS if needed)
@@ -406,6 +542,7 @@ const bubbleSyncPerformanceUrl = "https://fidfunddev.site/api/1.1/obj/syncperfor
 
 async function logSyncRun(table, recordsSynced, errors, duration, status, errorDetails = '', trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE) {
   try {
+    const isProdRun = !bubbleBase.includes('/version-test/');
     const res = await fetch(bubbleBase + 'obj/synclog', {
       method: 'POST',
       headers: { Authorization: `Bearer ${bubbleToken}`, 'Content-Type': 'application/json' },
@@ -414,6 +551,7 @@ async function logSyncRun(table, recordsSynced, errors, duration, status, errorD
         Duration: duration, Status: status, ErrorDetails: errorDetails,
         Trigger: trigger,
         RunTimestamp: new Date().toISOString(),
+        Environment: isProdRun ? 'PROD' : 'DEV',
       }),
     });
     const data = await res.json();
@@ -833,7 +971,7 @@ async function doSyncFirms(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
           if (wr.ok) {
             console.log(`  ✅ Synced FirmNo ${firm.FirmNo} (trn_dte: ${firm.LastSyncTime})`);
             if (ENABLE_DEV_RUN_WRITEBACK) {
-              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_firm_data', 'FirmNo', firm.FirmNo);
+              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_firm_data', 'FirmNo', firm.FirmNo, 2, bubbleBase);
             }
             success++;
             firmNoRows.push(firm);
@@ -1140,7 +1278,7 @@ async function doSyncProductionFirms(topLimit = 5, trigger = 'manual', bubbleBas
 
         if (wr.ok) {
           if (ENABLE_DEV_RUN_WRITEBACK) {
-            await writeBackDevRun(pool, 'dbo.Core_Organisations', 'Aff_FirmNo', rec.FirmNo);
+            await writeBackDevRun(pool, 'dbo.Core_Organisations', 'Aff_FirmNo', rec.FirmNo, 2, bubbleBase);
           }
           success++;
           if (!customIds || customIds.length === 0) {
@@ -1393,7 +1531,7 @@ async function doSyncBanks(topLimit = 5, trigger = 'manual', bubbleBase = DEFAUL
           if (wr.ok) {
             console.log(`  ✅ Synced bank ${key.AccountNumber} / FirmNo ${key.Firmno} (trn_dte: ${bank.trn_dte})`);
             if (ENABLE_DEV_RUN_WRITEBACK) {
-              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_firm_bank', 'ID', bank.ID);
+              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_firm_bank', 'ID', bank.ID, 2, bubbleBase);
             }
             success++;
             bankKeyRows.push(bank);
@@ -1687,7 +1825,7 @@ async function doSyncProductionBanks(topLimit = 5, trigger = 'manual', bubbleBas
 
         if (wr.ok) {
           if (ENABLE_DEV_RUN_WRITEBACK) {
-            await writeBackDevRun(pool, 'dbo.Core_BankAccounts', 'Id', rec.Id);
+            await writeBackDevRun(pool, 'dbo.Core_BankAccounts', 'Id', rec.Id, 2, bubbleBase);
           }
           success++;
           if (!customIds || customIds.length === 0) {
@@ -1740,6 +1878,7 @@ async function doSyncProductionBanks(topLimit = 5, trigger = 'manual', bubbleBas
     if (syncId) unregisterSync(syncId);
   }
 }
+
 // ─── doSyncPractitioners ─────────────────────────────────────────────────────
 async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase = DEFAULT_BUBBLE_BASE, devRun = 0, isProduction = false, customIds = null) {
   let syncId;
@@ -1980,7 +2119,7 @@ async function doSyncPractitioners(topLimit = 5, trigger = 'manual', bubbleBase 
           if (wr.ok) {
             console.log(`  ✅ Synced MemNo ${p.MemNo} (trn_dte: ${p.TransactionDate})`);
             if (ENABLE_DEV_RUN_WRITEBACK) {
-              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_mem_data', 'MemNo', p.MemNo);
+              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_mem_data', 'MemNo', p.MemNo, 2, bubbleBase);
             }
             success++;
             memNoRows.push(p);
@@ -2319,7 +2458,7 @@ async function doSyncProductionPractitioners(topLimit = 5, trigger = 'manual', b
 
         if (wr.ok) {
           if (ENABLE_DEV_RUN_WRITEBACK) {
-            await writeBackDevRun(pool, 'dbo.Core_Persons', 'Id', rec.ID);
+            await writeBackDevRun(pool, 'dbo.Core_Persons', 'Id', rec.ID, 2, bubbleBase);
           }
           success++;
           if (!customIds || customIds.length === 0) {
@@ -2558,7 +2697,7 @@ async function doSyncPractitionersAdm(topLimit = 5, trigger = 'manual', bubbleBa
           if (wr.ok) {
             console.log(`  ✅ Synced admin memno ${rec.memno} (trn_dte: ${rec.trn_dte})`);
             if (ENABLE_DEV_RUN_WRITEBACK) {
-              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_mem_adm', 'memno', rec.memno);
+              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_mem_adm', 'memno', rec.memno, 2, bubbleBase);
             }
             success++;
             memnoRows.push(rec);
@@ -2833,7 +2972,7 @@ async function doSyncProductionPractitionersAdm(topLimit = 5, trigger = 'manual'
 
         if (wr.ok) {
           if (ENABLE_DEV_RUN_WRITEBACK) {
-            await writeBackDevRun(pool, 'dbo.Core_Persons', 'Aff_PractitionerNo', rec.memno);
+            await writeBackDevRun(pool, 'dbo.Core_Persons', 'Aff_PractitionerNo', rec.memno, 2, bubbleBase);
           }
           success++;
           if (!customIds || customIds.length === 0) {
@@ -3103,7 +3242,7 @@ async function doSyncEmploymentHistory(topLimit = 5, trigger = 'manual', bubbleB
           if (wr.ok) {
             console.log(`  ✅ Synced employment memno ${key.memno} / firmno ${key.firmno} (trn_dte: ${rec.LastUpdated})`);
             if (ENABLE_DEV_RUN_WRITEBACK) {
-              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_tblemploymenthistory', 'ID', rec.id);
+              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_tblemploymenthistory', 'ID', rec.id, 2, bubbleBase);
             }
             success++;
             empKeyRows.push(rec);
@@ -3366,7 +3505,7 @@ async function doSyncProductionEmploymentHistory(topLimit = 5, trigger = 'manual
 
         if (wr.ok) {
           if (ENABLE_DEV_RUN_WRITEBACK) {
-            await writeBackDevRun(pool, 'dbo.Aff_PeriodFirmPractitioners', 'Id', rec.id);
+            await writeBackDevRun(pool, 'dbo.Aff_PeriodFirmPractitioners', 'Id', rec.id, 2, bubbleBase);
           }
           success++;
 
@@ -3634,7 +3773,7 @@ async function doSyncAudits(topLimit = 5, trigger = 'manual', bubbleBase = DEFAU
           if (wr.ok) {
             console.log(`  ✅ Synced audit FirmNo ${key.FIRMNO} / Year ${key.Year} (trn_dte: ${rec.LastUpdated})`);
             if (ENABLE_DEV_RUN_WRITEBACK) {
-              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_audits', 'ID', rec.ID);
+              await writeBackDevRun(pool, 'LPFF_FFC_ITG.dbo.itg_inn_audits', 'ID', rec.ID, 2, bubbleBase);
             }
             success++;
             auditKeyRows.push(rec);
@@ -4747,13 +4886,14 @@ app.get('/dashboard/versions', async (req, res) => {
     const cp = require('child_process');
     const output = cp.execSync('git log -n 30 --pretty=format:"%h|%ad|%an|%s" --date=short', { encoding: 'utf8' });
     const lines = output.split('\n').filter(l => l.trim() !== '');
+    const deployEnv = process.env.DEPLOY_ENV === 'production' ? 'PROD' : 'DEV';
     const versions = lines.map(line => {
       const parts = line.split('|');
       return {
         version: parts[0] || '—',
         dateTime: parts[1] || '—',
         author: parts[2] || '—',
-        environment: 'agent-dev',
+        environment: deployEnv,
         status: 'deployed',
         summary: parts[3] || '—',
         tags: 'Git Commit'
@@ -6186,8 +6326,15 @@ function saveWritebackState() {
 // Load writeback state on boot
 loadWritebackState();
 
-async function writeBackDevRun(pool, tableName, idField, idValue, targetDevRun = 2) {
+async function writeBackDevRun(pool, tableName, idField, idValue, targetDevRun = 2, bubbleBase = null) {
   if (!ENABLE_DEV_RUN_WRITEBACK || devRunWritebackDisabled) return;
+
+  // Root-cause guard: skip dev_run write-backs if environment is DEV (targets version-test)
+  if (bubbleBase && bubbleBase.includes('/version-test/')) {
+    console.log(`⚠️ [Write-Back] Skipped dev_run write-back for table ${tableName} (ID: ${idValue}) because active environment is DEV (Staging).`);
+    return;
+  }
+
   try {
     const request = pool.request();
     request.input('id', sql.VarChar, String(idValue));
@@ -7053,7 +7200,7 @@ async function doSyncApplications(topLimit = 5, trigger = 'manual', bubbleBase =
 
         if (wr.ok) {
           if (ENABLE_DEV_RUN_WRITEBACK) {
-            await writeBackDevRun(pool, 'dbo.Lic_LicenseApplications', 'Id', record.Id);
+            await writeBackDevRun(pool, 'dbo.Lic_LicenseApplications', 'Id', record.Id, 2, bubbleBase);
           }
           success++;
           // Incremental cache update
@@ -7393,7 +7540,7 @@ async function doSyncCertificates(topLimit = 5, trigger = 'manual', bubbleBase =
 
         if (wr.ok) {
           if (ENABLE_DEV_RUN_WRITEBACK) {
-            await writeBackDevRun(pool, 'dbo.Lic_Licenses', 'Id', record.Id);
+            await writeBackDevRun(pool, 'dbo.Lic_Licenses', 'Id', record.Id, 2, bubbleBase);
           }
           success++;
           latestTimestamp = record.Frwk_LastUpdatedTimestamp.toISOString();
